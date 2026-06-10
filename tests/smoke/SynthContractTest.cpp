@@ -538,15 +538,17 @@ bool checkPatchCostEstimate()
 {
     synth::SynthParameters parameters;
     const auto init = synth::estimatePatchCost(parameters);
+    // Init defaults render the filter without oversampling (0457fe4 tuned the
+    // default quality for realtime cost), so the filter multiplier is 1.0.
     if (init.noteLimit != 8
         || init.unisonVoices != 1
         || init.maxActiveVoices != 8
         || init.oscillatorSlotVoices != 1
         || init.voiceUnits != 8
-        || init.filterOversampling != 2
+        || init.filterOversampling != 1
         || init.activeFxModules != 0
-        || std::abs(init.totalUnits - 12.0f) > 0.001f
-        || init.loadPercent != 5
+        || std::abs(init.totalUnits - 8.0f) > 0.001f
+        || init.loadPercent != 3
         || init.elevated
         || init.high
         || init.overBudget)
@@ -568,7 +570,7 @@ bool checkPatchCostEstimate()
     const auto stackedCore = synth::estimatePatchCost(parameters);
     if (stackedCore.oscillatorSlotVoices != 5
         || stackedCore.voiceUnits != 40
-        || stackedCore.loadPercent != 25)
+        || stackedCore.loadPercent != 17)
     {
         std::cerr << "Patch cost should include live A1 core oscillator stack count.\n";
         return false;
