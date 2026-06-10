@@ -458,6 +458,13 @@ int writePresetReport(const std::filesystem::path& path, const std::filesystem::
         out << "\"passed\": " << (result.passed() ? "true" : "false") << ", ";
         out << "\"error_count\": " << result.errors.size() << ", ";
         out << "\"warning_count\": " << result.warnings.size();
+        if (!result.errors.empty())
+        {
+            out << ", \"errors\": [";
+            for (std::size_t errorIndex = 0; errorIndex < result.errors.size(); ++errorIndex)
+                out << (errorIndex > 0 ? ", " : "") << jsonString(result.errors[errorIndex]);
+            out << "]";
+        }
         out << "}";
         out << (i + 1 == results.size() ? "\n" : ",\n");
     }
