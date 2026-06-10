@@ -55,3 +55,4 @@
 - `2026-06-07-validate-ableton-automation-record-playback.md`
 - `2026-06-07-validate-ableton-bounce-realtime-compare.md`
 - `2026-06-07-build-ableton-strong-bounce-compare.md`
+- `2026-06-10-build-serum-massive-modulation-modernization.md`

@@ -388,7 +388,7 @@ Gateable low-frequency modulation source.
 Fields:
 
 - `shape` (enum)
-  - Required values: `Sine`, `Triangle`, `SawUp`, `SawDown`, `Square`, `SampleHold`, `Noise`.
+  - Required values: `Sine`, `Triangle`, `SawUp`, `SawDown`, `Square`, `SampleHold`, `Noise`, `Step`.
   - Recommended values: `Arc`, `TriS`, `TriC`.
 - `rate_mode` (enum)
   - Values: `Hz`, `Sync`.
@@ -400,6 +400,9 @@ Fields:
   - Values: `Poly`, `PolyOn`, `Mono`, `Song`.
 - `mono` (boolean)
 - `swing` (float `0..1`)
+- `step_count` (integer `2..16`)
+- `step_smooth` (float `0..1`)
+- `step.1` through `step.16` (float `-1..1`)
 - `value` (float `-1..1`)
 
 Invariants:
@@ -407,6 +410,11 @@ Invariants:
 - Per-voice LFO mode MUST maintain independent phase for overlapping voices.
 - Gated modes MUST define whether phase resets on note-on, gate-on, or transport.
 - Mono LFO mode MUST be audible as a distinct behavior in validation.
+- `Step` shape MUST spread one LFO cycle across the active `step_count` steps in
+  order, holding each step's value; `step_smooth` crossfades only the trailing
+  fraction of each step into the next so low values keep a gated character.
+- Editing step values, count, or smooth while notes are held MUST NOT reset LFO
+  phase (the running cycle keeps its position).
 
 #### 4.1.10 Ramp
 
@@ -858,11 +866,21 @@ Required views:
 - `Envelopes`
   - Amp ADSR and mod ADSR with compact visual curves.
 - `LFO`
-  - Shape, rate mode, rate/sync division, phase, gate mode, mono/per-voice, swing.
+  - Shape, rate mode, rate/sync division, phase, gate mode, mono/per-voice, swing,
+    step count, step smooth, and a live shape display. The `Step` shape MUST expose a
+    drawable step grid bound to the real `lfo.step.*` parameters, and the display
+    SHOULD animate a playhead from realtime engine state while voices sound.
 - `Ramp`
   - Enable, mode, delay, rise, sync, curve.
 - `TransMod`
   - Eight slots with source, scaler, destination depths, active modulation indicators.
+- `Modulation assignment`
+  - A drag-and-drop path from a modulation-source strip onto destination-bound
+    knobs MUST compile into ordinary TransMod slot state (no hidden routing).
+    Knobs whose parameter is a TransMod destination SHOULD show a halo ring for
+    each active route covering the modulated range, and SHOULD offer in-place
+    depth editing and route clearing that write the same `transmod.*` parameters
+    as the TransMod slot editors.
 - `Amp and Stereo`
   - Amp drive, level, pan, voice spread, unison spread, analog.
 - `FX`

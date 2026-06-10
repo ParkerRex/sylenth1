@@ -192,6 +192,8 @@ Dirty state and A/B compare are also control-path/UI workflow state, not preset 
 
 Current FX and quality fields are ordinary serialized parameters. `fx.enabled` is the global FX bypass. The fixed rack uses `fx.saturation_enabled`, `fx.distortion_mode`, `fx.phaser_*`, `fx.chorus_*`, `fx.eq_*`, `fx.delay_*`, `fx.reverb_*`, and `fx.compressor_*` fields. Delay sync is stored as an enum string such as `1/8`; distortion mode is stored as `Soft`, `Clip`, or `Fold`. Realtime and offline quality are stored as `quality.realtime_mode` and `quality.offline_mode`.
 
+The Step LFO table is ordinary serialized parameters: `lfo.shape` gains the `Step` choice, and `lfo.step_count` (2..16), `lfo.step_smooth` (0..1), and `lfo.step.1` through `lfo.step.16` (-1..1) store the drawn pattern. Presets that omit step fields load the registry-default descending ramp.
+
 ## Arp, Step, and Chord State
 
 Phase 1 arp/chord state is ordinary serialized parameter state so host automation, saved presets, and future AI generation use the same contract.

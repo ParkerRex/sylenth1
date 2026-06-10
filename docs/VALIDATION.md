@@ -235,6 +235,25 @@ binary, measure, install new binary, measure) because single cross-session
 CPU windows carry thermal and session-state confounds of a few percentage
 points.
 
+## Headless UI Snapshot
+
+The editor renders itself offscreen to PNG when `SYNTHIA_UI_SNAPSHOT=<path.png>`
+is set, so UI states can be captured from scripts without macOS
+screen-recording permission. `SYNTHIA_UI_SNAPSHOT_PRESET=<preset path>` loads a
+preset first (e.g. to capture the Step-LFO grid or modulation halos), and
+`SYNTHIA_UI_SNAPSHOT_QUIT=1` exits the standalone after writing the file:
+
+```bash
+SYNTHIA_UI_SNAPSHOT=/tmp/ui.png \
+SYNTHIA_UI_SNAPSHOT_QUIT=1 \
+SYNTHIA_UI_SNAPSHOT_PRESET="presets/factory/Bass/BA - Wub Stepper 01.SynthiaPreset" \
+./build/SynthiaPlugin_artefacts/Standalone/synthia.app/Contents/MacOS/synthia
+```
+
+The hook is a no-op without the environment variable and adds no UI state.
+`SynthiaRender --validate-presets` reports now include per-preset `errors`
+arrays so invalid presets are diagnosable from the JSON alone.
+
 ## Render Artifact Contract
 
 Each validation render should record:
