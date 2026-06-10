@@ -1288,6 +1288,55 @@ bool testDirectAndTransModRoutes()
         && std::abs(snapshot.transModPan - 0.2f) < 0.01f;
 }
 
+bool testStepLfoTracksStepTable()
+{
+    synth::SynthParameters parameters;
+    parameters.polyphony = 1;
+    parameters.unisonCount = 1;
+    parameters.filter.enabled = false;
+    parameters.osc.sawLevel = 1.0f;
+    parameters.lfo.shape = synth::LfoShapeChoice::Step;
+    parameters.lfo.rateMode = synth::LfoRateMode::Hz;
+    parameters.lfo.rateHz = 1.0f;
+    parameters.lfo.phaseDegrees = 0.0f;
+    parameters.lfo.gateMode = synth::LfoGateMode::PolyOn;
+    parameters.lfo.mono = false;
+    parameters.lfo.stepCount = 4;
+    parameters.lfo.stepSmooth = 0.0f;
+    parameters.lfo.steps.fill(0.0f);
+    parameters.lfo.steps[0] = 1.0f;
+    parameters.lfo.steps[1] = -1.0f;
+    parameters.lfo.steps[2] = 0.5f;
+    parameters.lfo.steps[3] = -0.5f;
+
+    synth::SynthEngine engine;
+    engine.prepare(48000.0, 1);
+    engine.setParameters(parameters);
+    engine.noteOn(60, 1.0f);
+
+    // 1 Hz at 48 kHz with 4 steps: each step holds for 12000 samples.
+    processSamples(engine, 128);
+    const auto stepZero = firstActiveSnapshot(engine).lfo;
+
+    processSamples(engine, 12000);
+    const auto stepOne = firstActiveSnapshot(engine).lfo;
+
+    // Raising smooth mid-note must blend toward the next step without
+    // resetting phase: sample 18000 sits halfway through step 1.
+    parameters.lfo.stepSmooth = 1.0f;
+    engine.setParameters(parameters);
+    processSamples(engine, 5872);
+    const auto blended = firstActiveSnapshot(engine).lfo;
+
+    const auto ok = std::abs(stepZero - 1.0f) < 0.01f
+        && std::abs(stepOne + 1.0f) < 0.01f
+        && std::abs(blended + 0.25f) < 0.02f;
+    if (!ok)
+        std::cerr << "step lfo values: step0=" << stepZero << " step1=" << stepOne
+                  << " blended=" << blended << "\n";
+    return ok;
+}
+
 bool testVoiceUnisonRandomAndPerformanceSources()
 {
     synth::SynthParameters parameters;
@@ -1978,6 +2027,12 @@ int main()
     if (!testDirectAndTransModRoutes())
     {
         std::cerr << "Direct/TransMod route test failed.\n";
+        return 1;
+    }
+
+    if (!testStepLfoTracksStepTable())
+    {
+        std::cerr << "Step LFO table test failed.\n";
         return 1;
     }
 

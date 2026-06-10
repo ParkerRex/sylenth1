@@ -21,6 +21,7 @@ LfoShape toLfoShape(LfoShapeChoice choice) noexcept
         case LfoShapeChoice::SampleHold:
         case LfoShapeChoice::Noise:
             return LfoShape::SampleHold;
+        case LfoShapeChoice::Step: return LfoShape::Step;
     }
 
     return LfoShape::SawDown;
@@ -823,6 +824,10 @@ void Voice::syncModulatorConfig(const SynthParameters& parameters) noexcept
         cachedTempoBpm = parameters.tempoBpm;
     }
 
+    // Step-table updates bypass the config-change gate: copying 16 floats is
+    // cheaper than comparing them, and live step edits must not reset phase.
+    lfo.setSteps(parameters.lfo.steps.data(), parameters.lfo.stepCount, parameters.lfo.stepSmooth);
+
     filter.prepareBlock(parameters);
     prepareTransModSlots(parameters);
     modulatorConfigInitialized = true;
@@ -1249,7 +1254,8 @@ VoiceSnapshot Voice::snapshot() const noexcept
         lastTransModSums.pulseWidth,
         lastTransModSums.filterCutoffSemitones,
         lastTransModSums.ampLevelDb,
-        lastTransModSums.pan
+        lastTransModSums.pan,
+        lfo.getPhase()
     };
 }
 } // namespace synth

@@ -41,6 +41,8 @@ public:
     int getMaxBlockSize() const noexcept { return maxBlockSize; }
     int getActiveVoiceCount() const noexcept { return voices.activeVoiceCount(); }
     const Voice* getVoice(int index) const noexcept { return voices.getVoice(index); }
+    float getMonoLfoPhase() const noexcept { return voices.monoLfoPhase(); }
+    float getMonoLfoValue() const noexcept { return voices.monoLfoValue(); }
 
 private:
     struct DirectChordOutputNote

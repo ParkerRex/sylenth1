@@ -43,6 +43,7 @@ struct VoiceSnapshot
     float transModFilterCutoffSemitones = 0.0f;
     float transModAmpLevelDb = 0.0f;
     float transModPan = 0.0f;
+    float lfoPhase = 0.0f;
 };
 
 struct StereoFrame

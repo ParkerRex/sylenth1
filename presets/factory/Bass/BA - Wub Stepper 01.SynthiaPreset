@@ -1,0 +1,163 @@
+{
+  "fileType": "SynthiaPreset",
+  "presetName": "Wub Stepper 01",
+  "presetAuthor": "Synthia Factory",
+  "presetDescription": "Step-LFO bass: a drawn 8-step cutoff pattern with smoothing, synced to 1/8.",
+  "product": "Synthia",
+  "productVersion": "0.1.0",
+  "tags": [
+    "Virtual Analog",
+    "Preview",
+    "Mono",
+    "Step LFO"
+  ],
+  "vendor": "ParkerX",
+  "url": "https://parkerx.com/",
+  "version": 1,
+  "bank": "Factory",
+  "category": "Bass",
+  "preview": {
+    "type": "render_fixture",
+    "fixture": "fixtures/midi/overlap-pluck.mid",
+    "render_mode": "wet"
+  },
+  "preset": {
+    "schema_version": 1,
+    "plugin_min_version": "0.1.0",
+    "id": "wub-stepper-01",
+    "display_name": "Wub Stepper 01",
+    "author": "Synthia Factory",
+    "description": "Step-LFO bass: a drawn 8-step cutoff pattern with smoothing, synced to 1/8.",
+    "tags": [
+      "bass",
+      "mono",
+      "wub",
+      "step"
+    ],
+    "parameters": {
+      "voice.mode": "MonoLegato",
+      "voice.polyphony": 1,
+      "voice.unison_count": 1,
+      "voice.retrigger": false,
+      "osc.saw_level": 0.4,
+      "osc.pulse_level": 0.1,
+      "osc.noise_level": 0.0,
+      "osc.sub_level": 0.55,
+      "osc.stack_count": 1,
+      "osc.stack_detune": 0.0,
+      "osc.pulse_width": 0.5,
+      "filter.mode": "L4",
+      "filter.cutoff_semitones": 52.0,
+      "filter.resonance": 0.42,
+      "filter.drive": 0.3,
+      "filter.keytrack": 0.12,
+      "amp_env.attack_ms": 4.0,
+      "amp_env.decay_ms": 340.0,
+      "amp_env.sustain": 0.6,
+      "amp_env.release_ms": 100.0,
+      "mod_env.attack_ms": 1.0,
+      "mod_env.decay_ms": 380.0,
+      "mod_env.sustain": 0.0,
+      "mod_env.release_ms": 120.0,
+      "lfo.shape": "Step",
+      "lfo.rate_mode": "Sync",
+      "lfo.sync_division": "1/8",
+      "lfo.phase_degrees": 0.0,
+      "lfo.gate_mode": "Mono",
+      "lfo.mono": true,
+      "lfo.step_count": 8,
+      "lfo.step_smooth": 0.15,
+      "lfo.step.1": 1.0,
+      "lfo.step.2": 0.2,
+      "lfo.step.3": 0.7,
+      "lfo.step.4": -0.3,
+      "lfo.step.5": 0.45,
+      "lfo.step.6": -0.65,
+      "lfo.step.7": 0.1,
+      "lfo.step.8": -1.0,
+      "layer.1.enabled": true,
+      "layer.1.level_db": 0.0,
+      "layer.1.pan": 0.0,
+      "layer.1.osc.1.enabled": true,
+      "layer.1.osc.1.voices": 1,
+      "layer.1.osc.1.waveform": "Saw",
+      "layer.1.osc.1.level": 0.8,
+      "layer.1.osc.1.detune": 0.0,
+      "layer.1.osc.1.stereo": 0.0,
+      "layer.1.osc.2.enabled": true,
+      "layer.1.osc.2.voices": 1,
+      "layer.1.osc.2.level": 0.5,
+      "layer.2.enabled": false,
+      "layer.2.osc.1.enabled": false,
+      "layer.2.osc.1.voices": 0,
+      "layer.2.osc.2.enabled": false,
+      "layer.2.osc.2.voices": 0,
+      "transmod.1.enabled": true,
+      "transmod.1.source": "LFO",
+      "transmod.1.scaler": "None",
+      "transmod.1.filter_cutoff_semitones": 30.0,
+      "amp.drive": 0.26,
+      "amp.level_db": -10.0,
+      "amp.pan_spread": 0.0,
+      "amp.unison_spread": 0.0,
+      "amp.analog": 0.03,
+      "fx.enabled": true,
+      "fx.saturation_enabled": true,
+      "fx.saturation_mix": 0.18,
+      "fx.saturation_drive": 0.42,
+      "fx.delay_enabled": false,
+      "fx.reverb_enabled": false,
+      "macro.motion": 0.5,
+      "macro.width": 0.0,
+      "macro.drive": 0.4,
+      "macro.space": 0.0
+    },
+    "mod_slots": [
+      {
+        "slot_id": 1,
+        "enabled": true,
+        "source": "LFO",
+        "scaler": "None",
+        "depths": {
+          "filter.cutoff_semitones": 30.0
+        },
+        "depth_domain": "Physical"
+      }
+    ],
+    "macros": [
+      {
+        "id": "motion",
+        "display_name": "Motion",
+        "value": 0.5,
+        "assignments": []
+      },
+      {
+        "id": "width",
+        "display_name": "Width",
+        "value": 0.0,
+        "assignments": []
+      },
+      {
+        "id": "drive",
+        "display_name": "Drive",
+        "value": 0.4,
+        "assignments": []
+      },
+      {
+        "id": "space",
+        "display_name": "Space",
+        "value": 0.0,
+        "assignments": []
+      }
+    ],
+    "metadata": {
+      "program": "synthia_lab_rebuild",
+      "browser": {
+        "bank": "Factory",
+        "category": "Bass",
+        "source": "factory"
+      },
+      "implementation_note": "First factory patch for the Step LFO: a drawn 8-step cutoff pattern with smoothing over the TransMod LFO->cutoff route."
+    }
+  }
+}

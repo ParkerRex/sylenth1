@@ -128,7 +128,7 @@ std::vector<ParameterSpec> buildSpecs()
         floatParam("mod_env.sustain", "Mod Sustain", "mod_env", "normalized", 0.0f, 1.0f, 0.0f, 0.0001f),
         floatParam("mod_env.release_ms", "Mod Release", "mod_env", "milliseconds", 1.0f, 10000.0f, 160.0f, 0.01f, 0.35f),
 
-        choiceParam("lfo.shape", "LFO Shape", "lfo", {"Sine", "Triangle", "SawUp", "SawDown", "Square", "SampleHold", "Noise"}, 3),
+        choiceParam("lfo.shape", "LFO Shape", "lfo", {"Sine", "Triangle", "SawUp", "SawDown", "Square", "SampleHold", "Noise", "Step"}, 3),
         choiceParam("lfo.rate_mode", "LFO Rate Mode", "lfo", {"Hz", "Sync"}, 1),
         floatParam("lfo.rate_hz", "LFO Rate", "lfo", "Hz", 0.01f, 40.0f, 2.0f, 0.0001f, 0.35f),
         choiceParam("lfo.sync_division", "LFO Sync Division", "lfo", {"1/16", "1/8", "1/8D", "1/4", "1/2", "1 bar"}, 3),
@@ -136,6 +136,8 @@ std::vector<ParameterSpec> buildSpecs()
         choiceParam("lfo.gate_mode", "LFO Gate Mode", "lfo", {"Poly", "PolyOn", "Mono", "Song"}, 1),
         boolParam("lfo.mono", "LFO Mono", "lfo", false),
         floatParam("lfo.swing", "LFO Swing", "lfo", "normalized", 0.0f, 1.0f, 0.0f, 0.0001f),
+        floatParam("lfo.step_count", "LFO Step Count", "lfo", "steps", 2.0f, 16.0f, 8.0f, 1.0f),
+        floatParam("lfo.step_smooth", "LFO Step Smooth", "lfo", "normalized", 0.0f, 1.0f, 0.0f, 0.0001f),
 
         boolParam("ramp.enabled", "Ramp Enabled", "ramp", false),
         choiceParam("ramp.mode", "Ramp Mode", "ramp", {"OneShot", "Loop", "Sync"}, 0),
@@ -203,6 +205,11 @@ std::vector<ParameterSpec> buildSpecs()
         floatParam("macro.drive", "Drive", "macro", "normalized", 0.0f, 1.0f, 0.0f, 0.0001f),
         floatParam("macro.space", "Space", "macro", "normalized", 0.0f, 1.0f, 0.0f, 0.0001f),
     };
+
+    for (int step = 1; step <= lfoStepSlotCount; ++step)
+        specs.push_back(floatParam("lfo.step." + std::to_string(step),
+                                   "LFO Step " + std::to_string(step), "lfo", "normalized",
+                                   -1.0f, 1.0f, defaultLfoStepValue(step - 1), 0.0001f));
 
     const std::vector<std::string> oscillatorWaveforms { "Saw", "Pulse", "Noise", "Sub" };
     for (int layer = 1; layer <= layerCount; ++layer)

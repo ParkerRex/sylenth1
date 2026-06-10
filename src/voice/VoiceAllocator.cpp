@@ -58,6 +58,7 @@ LfoShape toLfoShape(LfoShapeChoice choice) noexcept
         case LfoShapeChoice::SampleHold:
         case LfoShapeChoice::Noise:
             return LfoShape::SampleHold;
+        case LfoShapeChoice::Step: return LfoShape::Step;
     }
 
     return LfoShape::SawDown;
@@ -410,6 +411,10 @@ void VoiceAllocator::renderBlock(const SynthParameters& parameters, float* outLe
 
 void VoiceAllocator::syncMonoLfoConfig(const SynthParameters& parameters) noexcept
 {
+    // Step-table edits skip the config gate so live tweaks never reset phase,
+    // mirroring Voice::syncModulatorConfig.
+    monoLfo.setSteps(parameters.lfo.steps.data(), parameters.lfo.stepCount, parameters.lfo.stepSmooth);
+
     const auto lfoConfigChanged = !monoLfoConfigInitialized
         || cachedMonoLfoShape != parameters.lfo.shape
         || cachedMonoLfoRateMode != parameters.lfo.rateMode

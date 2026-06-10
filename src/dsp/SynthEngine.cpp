@@ -330,13 +330,18 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.modEnv.decayMs = std::clamp(finiteOr(parameters.modEnv.decayMs, defaults.modEnv.decayMs), 1.0f, 10000.0f);
     parameters.modEnv.sustain = std::clamp(finiteOr(parameters.modEnv.sustain, defaults.modEnv.sustain), 0.0f, 1.0f);
     parameters.modEnv.releaseMs = std::clamp(finiteOr(parameters.modEnv.releaseMs, defaults.modEnv.releaseMs), 1.0f, 10000.0f);
-    parameters.lfo.shape = static_cast<LfoShapeChoice>(std::clamp(static_cast<int>(parameters.lfo.shape), 0, 6));
+    parameters.lfo.shape = static_cast<LfoShapeChoice>(
+        std::clamp(static_cast<int>(parameters.lfo.shape), 0, static_cast<int>(LfoShapeChoice::Step)));
     parameters.lfo.rateMode = static_cast<LfoRateMode>(std::clamp(static_cast<int>(parameters.lfo.rateMode), 0, 1));
     parameters.lfo.rateHz = std::clamp(finiteOr(parameters.lfo.rateHz, defaults.lfo.rateHz), 0.01f, 40.0f);
     parameters.lfo.syncDivision = std::clamp(parameters.lfo.syncDivision, 0, 5);
     parameters.lfo.phaseDegrees = std::clamp(finiteOr(parameters.lfo.phaseDegrees, defaults.lfo.phaseDegrees), 0.0f, 360.0f);
     parameters.lfo.gateMode = static_cast<LfoGateMode>(std::clamp(static_cast<int>(parameters.lfo.gateMode), 0, 3));
     parameters.lfo.swing = std::clamp(finiteOr(parameters.lfo.swing, defaults.lfo.swing), 0.0f, 1.0f);
+    parameters.lfo.stepCount = std::clamp(parameters.lfo.stepCount, 1, lfoStepSlotCount);
+    parameters.lfo.stepSmooth = std::clamp(finiteOr(parameters.lfo.stepSmooth, defaults.lfo.stepSmooth), 0.0f, 1.0f);
+    for (std::size_t step = 0; step < parameters.lfo.steps.size(); ++step)
+        parameters.lfo.steps[step] = std::clamp(finiteOr(parameters.lfo.steps[step], 0.0f), -1.0f, 1.0f);
     parameters.ramp.mode = static_cast<RampMode>(std::clamp(static_cast<int>(parameters.ramp.mode), 0, 2));
     parameters.ramp.delayMs = std::clamp(finiteOr(parameters.ramp.delayMs, defaults.ramp.delayMs), 0.0f, 10000.0f);
     parameters.ramp.riseMs = std::clamp(finiteOr(parameters.ramp.riseMs, defaults.ramp.riseMs), 1.0f, 10000.0f);

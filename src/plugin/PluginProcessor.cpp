@@ -186,6 +186,7 @@ void SynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         diagnosticPeak.store(0.0f, std::memory_order_relaxed);
         diagnosticActiveVoices.store(0, std::memory_order_relaxed);
         diagnosticBlockSize.store(totalSamples, std::memory_order_relaxed);
+        uiLfoVoiceActive.store(false, std::memory_order_relaxed);
         return;
     }
 
@@ -226,6 +227,11 @@ void SynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     blockPeak = std::max(blockPeak, finalStats.peak);
     blockInvalidSamples += finalStats.invalidSamples;
     blockActiveVoices = finalStats.activeVoices;
+
+    const auto usesMonoLfo = parameterSnapshot.lfo.mono
+        || parameterSnapshot.lfo.gateMode == synth::LfoGateMode::Mono
+        || parameterSnapshot.lfo.gateMode == synth::LfoGateMode::Song;
+    publishUiVisuals(buffer, totalSamples, blockActiveVoices, usesMonoLfo);
 
     diagnosticPeak.store(blockPeak, std::memory_order_relaxed);
     diagnosticInvalidSamples.fetch_add(blockInvalidSamples, std::memory_order_relaxed);
@@ -423,6 +429,10 @@ void SynthAudioProcessor::cacheParameterPointers()
     raw.lfoGateMode = get("lfo.gate_mode");
     raw.lfoMono = get("lfo.mono");
     raw.lfoSwing = get("lfo.swing");
+    raw.lfoStepCount = get("lfo.step_count");
+    raw.lfoStepSmooth = get("lfo.step_smooth");
+    for (int step = 0; step < synth::lfoStepSlotCount; ++step)
+        raw.lfoSteps[static_cast<std::size_t>(step)] = get(("lfo.step." + std::to_string(step + 1)).c_str());
     raw.rampEnabled = get("ramp.enabled");
     raw.rampMode = get("ramp.mode");
     raw.rampDelayMs = get("ramp.delay_ms");
@@ -610,6 +620,12 @@ synth::SynthParameters SynthAudioProcessor::readParameters(float tempoBpm, bool 
     snapshot.lfo.gateMode = static_cast<synth::LfoGateMode>(static_cast<int>(std::round(value(raw.lfoGateMode, 1.0f))));
     snapshot.lfo.mono = value(raw.lfoMono, 0.0f) >= 0.5f;
     snapshot.lfo.swing = value(raw.lfoSwing, 0.0f);
+    snapshot.lfo.stepCount = std::clamp(static_cast<int>(std::round(value(raw.lfoStepCount, 8.0f))), 2,
+                                        synth::lfoStepSlotCount);
+    snapshot.lfo.stepSmooth = value(raw.lfoStepSmooth, 0.0f);
+    for (int step = 0; step < synth::lfoStepSlotCount; ++step)
+        snapshot.lfo.steps[static_cast<std::size_t>(step)] =
+            value(raw.lfoSteps[static_cast<std::size_t>(step)], synth::defaultLfoStepValue(step));
     snapshot.ramp.enabled = value(raw.rampEnabled, 0.0f) >= 0.5f;
     snapshot.ramp.mode = static_cast<synth::RampMode>(static_cast<int>(std::round(value(raw.rampMode, 0.0f))));
     snapshot.ramp.delayMs = value(raw.rampDelayMs, 0.0f);
@@ -1176,6 +1192,76 @@ SynthAudioProcessor::DiagnosticsSnapshot SynthAudioProcessor::getDiagnosticsSnap
 void SynthAudioProcessor::requestPanic() noexcept
 {
     panicRequested.store(true, std::memory_order_release);
+}
+
+void SynthAudioProcessor::publishUiVisuals(const juce::AudioBuffer<float>& buffer, int totalSamples,
+                                           int activeVoices, bool usesMonoLfo) noexcept
+{
+    if (buffer.getNumChannels() > 0 && totalSamples > 0)
+    {
+        const auto* left = buffer.getReadPointer(0);
+        const auto* right = buffer.getNumChannels() > 1 ? buffer.getReadPointer(1) : left;
+        auto writePosition = scopeWritePosition.load(std::memory_order_relaxed);
+        for (int i = 0; i < totalSamples; ++i)
+        {
+            const auto sample = 0.5f * (left[i] + right[i]);
+            scopeSamples[static_cast<std::size_t>(writePosition)]
+                .store(std::isfinite(sample) ? sample : 0.0f, std::memory_order_relaxed);
+            writePosition = (writePosition + 1) & (scopeCapacity - 1);
+        }
+        scopeWritePosition.store(writePosition, std::memory_order_release);
+    }
+
+    auto published = false;
+    if (activeVoices > 0)
+    {
+        if (usesMonoLfo)
+        {
+            uiLfoPhase.store(engine.getMonoLfoPhase(), std::memory_order_relaxed);
+            uiLfoValue.store(engine.getMonoLfoValue(), std::memory_order_relaxed);
+            published = true;
+        }
+
+        for (int index = 0; index < 32 && !published; ++index)
+        {
+            const auto* voice = engine.getVoice(index);
+            if (voice == nullptr)
+                break;
+            if (!voice->isActive())
+                continue;
+
+            const auto voiceState = voice->snapshot();
+            uiLfoPhase.store(voiceState.lfoPhase, std::memory_order_relaxed);
+            uiLfoValue.store(voiceState.lfo, std::memory_order_relaxed);
+            published = true;
+        }
+    }
+    uiLfoVoiceActive.store(published, std::memory_order_relaxed);
+}
+
+SynthAudioProcessor::UiVisualSnapshot SynthAudioProcessor::getUiVisualSnapshot() const noexcept
+{
+    UiVisualSnapshot snapshot;
+    snapshot.lfoVoiceActive = uiLfoVoiceActive.load(std::memory_order_relaxed);
+    snapshot.lfoPhase = uiLfoPhase.load(std::memory_order_relaxed);
+    snapshot.lfoValue = uiLfoValue.load(std::memory_order_relaxed);
+    return snapshot;
+}
+
+int SynthAudioProcessor::readScopeSamples(float* destination, int maxSamples) const noexcept
+{
+    if (destination == nullptr || maxSamples <= 0)
+        return 0;
+
+    const auto count = std::min(maxSamples, scopeCapacity);
+    const auto end = scopeWritePosition.load(std::memory_order_acquire);
+    auto index = (end - count + scopeCapacity) & (scopeCapacity - 1);
+    for (int i = 0; i < count; ++i)
+    {
+        destination[i] = scopeSamples[static_cast<std::size_t>(index)].load(std::memory_order_relaxed);
+        index = (index + 1) & (scopeCapacity - 1);
+    }
+    return count;
 }
 
 void SynthAudioProcessor::timerCallback()

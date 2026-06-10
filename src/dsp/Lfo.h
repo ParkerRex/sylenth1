@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 namespace synth
 {
 enum class LfoShape
@@ -9,8 +11,11 @@ enum class LfoShape
     SawUp,
     SawDown,
     Square,
-    SampleHold
+    SampleHold,
+    Step
 };
+
+inline constexpr int lfoMaxSteps = 16;
 
 class Lfo
 {
@@ -19,6 +24,10 @@ public:
     void setRateHz(float newRateHz) noexcept;
     void setShape(LfoShape newShape) noexcept;
     void setPhaseDegrees(float degrees) noexcept;
+    // Step-sequencer table for LfoShape::Step. One LFO cycle spans the active
+    // steps; smooth crossfades the tail of each step into the next. Editing
+    // step values never resets phase, so live tweaks stay click-free.
+    void setSteps(const float* stepValues, int count, float smooth) noexcept;
     void resetPhase() noexcept;
     float process() noexcept;
 
@@ -38,5 +47,8 @@ private:
     float heldRandom = 0.0f;
     unsigned int randomState = 0x12345678u;
     LfoShape shape = LfoShape::Sine;
+    std::array<float, lfoMaxSteps> steps {};
+    int stepCount = 8;
+    float stepSmooth = 0.0f;
 };
 } // namespace synth

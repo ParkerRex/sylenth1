@@ -33,6 +33,8 @@ public:
 
     int activeVoiceCount() const noexcept;
     const Voice* getVoice(int index) const noexcept;
+    float monoLfoPhase() const noexcept { return monoLfo.getPhase(); }
+    float monoLfoValue() const noexcept { return monoLfo.getValue(); }
 
 private:
     static constexpr int maxVoiceSlots = 32;

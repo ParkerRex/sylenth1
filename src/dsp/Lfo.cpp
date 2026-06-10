@@ -35,6 +35,20 @@ void Lfo::setShape(LfoShape newShape) noexcept
     shape = newShape;
 }
 
+void Lfo::setSteps(const float* stepValues, int count, float smooth) noexcept
+{
+    stepCount = std::clamp(count, 1, lfoMaxSteps);
+    stepSmooth = std::isfinite(smooth) ? std::clamp(smooth, 0.0f, 1.0f) : 0.0f;
+    if (stepValues == nullptr)
+        return;
+
+    for (int i = 0; i < stepCount; ++i)
+    {
+        const auto raw = stepValues[i];
+        steps[static_cast<std::size_t>(i)] = std::isfinite(raw) ? std::clamp(raw, -1.0f, 1.0f) : 0.0f;
+    }
+}
+
 void Lfo::setPhaseDegrees(float degrees) noexcept
 {
     const auto newPhaseOffset = std::fmod(std::max(0.0f, degrees) / 360.0f, 1.0f);
@@ -85,6 +99,27 @@ float Lfo::valueForPhase(float phaseValue) noexcept
             return phaseValue < 0.5f ? 1.0f : -1.0f;
         case LfoShape::SampleHold:
             return heldRandom;
+        case LfoShape::Step:
+        {
+            const auto count = static_cast<float>(stepCount);
+            const auto position = phaseValue * count;
+            const auto index = std::min(static_cast<int>(position), stepCount - 1);
+            const auto current = steps[static_cast<std::size_t>(index)];
+            if (stepSmooth <= 0.0001f)
+                return current;
+
+            // Crossfade only inside the trailing `stepSmooth` fraction of the
+            // step so low smooth values keep the gated stepper character.
+            const auto fraction = position - static_cast<float>(index);
+            const auto blendStart = 1.0f - stepSmooth;
+            if (fraction <= blendStart)
+                return current;
+
+            const auto nextIndex = index + 1 < stepCount ? index + 1 : 0;
+            const auto next = steps[static_cast<std::size_t>(nextIndex)];
+            const auto blend = (fraction - blendStart) / stepSmooth;
+            return current + (next - current) * blend;
+        }
     }
 
     return 0.0f;

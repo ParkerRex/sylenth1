@@ -119,6 +119,20 @@ public:
     DiagnosticsSnapshot getDiagnosticsSnapshot() const;
     void requestPanic() noexcept;
 
+    // Lock-free visual feed for the editor's animated displays. The audio thread
+    // publishes after rendering; the editor only ever reads the atomics.
+    struct UiVisualSnapshot
+    {
+        bool lfoVoiceActive = false;
+        float lfoPhase = 0.0f;
+        float lfoValue = 0.0f;
+    };
+    UiVisualSnapshot getUiVisualSnapshot() const noexcept;
+    // Copies the most recent output-scope samples (oldest first). Returns the
+    // count copied; tearing at the write head is acceptable for visualization.
+    int readScopeSamples(float* destination, int maxSamples) const noexcept;
+    static constexpr int scopeCapacity = 2048;
+
 private:
     struct PendingMidiControllerValue
     {
@@ -234,6 +248,9 @@ private:
         std::atomic<float>* lfoGateMode = nullptr;
         std::atomic<float>* lfoMono = nullptr;
         std::atomic<float>* lfoSwing = nullptr;
+        std::atomic<float>* lfoStepCount = nullptr;
+        std::atomic<float>* lfoStepSmooth = nullptr;
+        std::array<std::atomic<float>*, synth::lfoStepSlotCount> lfoSteps {};
         std::atomic<float>* rampEnabled = nullptr;
         std::atomic<float>* rampMode = nullptr;
         std::atomic<float>* rampDelayMs = nullptr;
@@ -330,6 +347,8 @@ private:
     void applyPendingMappedControllers();
     void applyMappedControllerValue(int parameterIndex, int controllerValue);
     void setMidiControllerStatus(const juce::String& status);
+    void publishUiVisuals(const juce::AudioBuffer<float>& buffer, int totalSamples,
+                          int activeVoices, bool usesMonoLfo) noexcept;
 
     juce::AudioProcessorValueTreeState parameters;
     synth::SynthEngine engine;
@@ -355,6 +374,11 @@ private:
     std::atomic<float> diagnosticPeak { 0.0f };
     std::atomic<float> diagnosticTempoBpm { 128.0f };
     std::atomic<bool> panicRequested { false };
+    std::array<std::atomic<float>, scopeCapacity> scopeSamples {};
+    std::atomic<int> scopeWritePosition { 0 };
+    std::atomic<bool> uiLfoVoiceActive { false };
+    std::atomic<float> uiLfoPhase { 0.0f };
+    std::atomic<float> uiLfoValue { 0.0f };
     int tailDrainSamplesRemaining = 0;
     std::atomic<std::uint64_t> parameterStateSequence { 0 };
     std::atomic<std::uint64_t> presetParameterRevision { 1 };

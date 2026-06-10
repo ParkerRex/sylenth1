@@ -35,7 +35,8 @@ enum class LfoShapeChoice
     SawDown = 3,
     Square = 4,
     SampleHold = 5,
-    Noise = 6
+    Noise = 6,
+    Step = 7
 };
 
 enum class LfoRateMode
@@ -156,6 +157,14 @@ inline constexpr int preparedOscillatorSlotCount = layerCount * oscillatorSlotsP
 inline constexpr int renderBlockMaxSamples = 64;
 inline constexpr int arpStepCount = 16;
 inline constexpr int chordVoiceCount = 8;
+inline constexpr int lfoStepSlotCount = 16;
+
+// Factory step table: a descending ramp across all 16 slots so the Step LFO
+// is audibly a stepper out of the box at any step count.
+inline constexpr float defaultLfoStepValue(int index) noexcept
+{
+    return 1.0f - 2.0f * static_cast<float>(index) / static_cast<float>(lfoStepSlotCount - 1);
+}
 
 struct EnvelopeParameters
 {
@@ -278,6 +287,14 @@ struct LfoParameters
     LfoGateMode gateMode = LfoGateMode::PolyOn;
     bool mono = false;
     float swing = 0.0f;
+    int stepCount = 8;
+    float stepSmooth = 0.0f;
+    std::array<float, lfoStepSlotCount> steps = [] {
+        std::array<float, lfoStepSlotCount> values {};
+        for (int i = 0; i < lfoStepSlotCount; ++i)
+            values[static_cast<std::size_t>(i)] = defaultLfoStepValue(i);
+        return values;
+    }();
 };
 
 struct MacroParameters
