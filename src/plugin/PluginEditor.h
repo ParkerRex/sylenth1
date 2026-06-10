@@ -28,6 +28,7 @@
 // while deeper Sylenth parity such as per-layer filters, copy/paste, previews, and full A1
 // field migration is still future work.
 class SynthAudioProcessorEditor final : public juce::AudioProcessorEditor,
+                                        public juce::DragAndDropContainer,
                                         private juce::Timer
 {
 public:
@@ -42,11 +43,14 @@ public:
 private:
     class SynthLookAndFeel;
     class LayoutSection;
+    class ModTargetSlider;
     class ParameterControl;
     class Panel;
     class OscillatorPanel;
     class FilterPanel;
     class EnvelopePanel;
+    class LfoModulePanel;
+    class ModSourcesPanel;
     class LcdDisplay;
     class MixerPanel;
     class PresetWorkflowPanel;
@@ -104,6 +108,14 @@ private:
     void updateStatus(const juce::String& message);
     void updateDiagnostics();
     void timerCallback() override;
+
+    // Drag-and-drop modulation: knobs bound to TransMod destinations accept
+    // source chips; routes compile through the ModulationRouteModel adapter.
+    void wireModulationTargets();
+    void handleModSourceDrop(ModTargetSlider& target, const juce::String& sourceId);
+    void handleModDepthEdit(int slotNumber, const juce::String& destinationId, float depth);
+    void handleModSlotClear(int slotNumber);
+    void refreshModulationVisuals();
 
     Panel* addPanel(juce::Component& page,
                     std::vector<std::unique_ptr<Panel>>& store,
@@ -174,7 +186,9 @@ private:
     std::unique_ptr<FilterPanel> filterPanel;
     std::unique_ptr<EnvelopePanel> ampEnvPanel;
     std::unique_ptr<EnvelopePanel> modEnvPanel;
-    Panel* lfoPanel = nullptr;
+    std::unique_ptr<LfoModulePanel> lfoModulePanel;
+    std::unique_ptr<ModSourcesPanel> modSourcesPanel;
+    std::vector<ModTargetSlider*> modTargetSliders;
     Panel* rampPanel = nullptr;
     Panel* ampPanel = nullptr;
     Panel* macroPanel = nullptr;

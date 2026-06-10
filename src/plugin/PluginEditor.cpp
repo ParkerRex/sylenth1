@@ -9,40 +9,44 @@
 
 namespace
 {
-// ---- Palette (warm tan brushed metal, modeled on the Sylenth1 hardware skin) ----
+// ---- Palette (flat midnight graphite with electric accents, Serum/Massive-era) ----
 // Names are kept stable so the whole editor re-skins by repointing these values.
-const auto background   = juce::Colour::fromRGB(66, 55, 40);    // warm brushed-brown body
-const auto headerBg     = juce::Colour::fromRGB(50, 42, 30);    // darker rail (top/footer)
-const auto panelBg      = juce::Colour::fromRGB(129, 116, 93);  // light tan brushed metal
-const auto panelHeader  = juce::Colour::fromRGB(86, 73, 53);    // module caption bar
-const auto fieldBg      = juce::Colour::fromRGB(32, 25, 16);    // recessed readout / field
-const auto stroke       = juce::Colour::fromRGB(160, 138, 102); // bright brass bevel highlight
-const auto strokeSoft   = juce::Colour::fromRGB(92, 77, 56);    // soft brown edge / shadow
-const auto text         = juce::Colour::fromRGB(245, 237, 217); // cream label text
-const auto mutedText    = juce::Colour::fromRGB(202, 186, 154); // tan secondary text
-const auto accent       = juce::Colour::fromRGB(230, 176, 74);  // amber (value arcs / selection)
-const auto live         = juce::Colour::fromRGB(150, 198, 84);  // green LED (on / meter low)
-const auto staged       = juce::Colour::fromRGB(228, 150, 62);  // amber-orange (edited / meter mid)
-const auto warn         = juce::Colour::fromRGB(212, 92, 64);   // red (clip / danger)
-const auto info         = juce::Colour::fromRGB(112, 152, 198); // steel blue accents
-const auto knobFill     = juce::Colour::fromRGB(44, 40, 34);    // dark charcoal knob cap
-const auto knobStroke   = juce::Colour::fromRGB(180, 162, 128); // chrome / brass knob rim
+const auto background   = juce::Colour::fromRGB(19, 21, 26);    // near-black blue-grey body
+const auto headerBg     = juce::Colour::fromRGB(13, 15, 19);    // darker rail (top/footer)
+const auto panelBg      = juce::Colour::fromRGB(29, 32, 39);    // flat module card
+const auto panelHeader  = juce::Colour::fromRGB(36, 40, 49);    // module caption strip
+const auto fieldBg      = juce::Colour::fromRGB(14, 16, 20);    // recessed readout / field
+const auto stroke       = juce::Colour::fromRGB(58, 64, 78);    // hairline border highlight
+const auto strokeSoft   = juce::Colour::fromRGB(40, 45, 55);    // soft edge / divider
+const auto text         = juce::Colour::fromRGB(232, 237, 245); // primary label text
+const auto mutedText    = juce::Colour::fromRGB(134, 143, 160); // secondary text
+const auto accent       = juce::Colour::fromRGB(54, 213, 226);  // electric cyan (arcs / selection)
+const auto live         = juce::Colour::fromRGB(98, 226, 142);  // green (on / meter low)
+const auto staged       = juce::Colour::fromRGB(240, 172, 72);  // amber (edited / meter mid)
+const auto warn         = juce::Colour::fromRGB(240, 94, 90);   // red (clip / danger)
+const auto info         = juce::Colour::fromRGB(118, 158, 240); // blue accents
+const auto knobFill     = juce::Colour::fromRGB(38, 42, 51);    // matte knob cap
+const auto knobStroke   = juce::Colour::fromRGB(62, 69, 84);    // thin knob rim
 
-// Glossy blue LCD screen, as used for the Sylenth preset/arp display and recessed readouts.
-const auto lcdBg        = juce::Colour::fromRGB(26, 62, 84);
-const auto lcdBgEdge    = juce::Colour::fromRGB(12, 34, 50);
-const auto lcdText      = juce::Colour::fromRGB(152, 224, 236);
-const auto lcdDim       = juce::Colour::fromRGB(98, 168, 190);
-const auto lcdStroke    = juce::Colour::fromRGB(60, 122, 150);
+// Dark glass display: the preset/diagnostics hub and live scope screen.
+const auto lcdBg        = juce::Colour::fromRGB(11, 22, 30);
+const auto lcdBgEdge    = juce::Colour::fromRGB(6, 12, 18);
+const auto lcdText      = juce::Colour::fromRGB(92, 230, 242);
+const auto lcdDim       = juce::Colour::fromRGB(64, 142, 162);
+const auto lcdStroke    = juce::Colour::fromRGB(34, 74, 92);
 
-// Functional zone hues drive each module's header identity tick so the grid reads as a
-// rack of grouped modules rather than a uniform form. Restrained on purpose: source,
-// shaping, performance, and modulation are the only zones; FX keeps per-module badges.
-const auto zoneSource   = live;   // oscillators / tone
-const auto zoneShape    = accent; // filter / envelopes / LFO
-const auto zonePerform  = info;   // voice / amp / ramp / macros
-const auto zoneMod      = accent; // modulation routes
-const auto zoneUtility  = juce::Colour::fromRGB(138, 122, 92); // browser / MIDI
+// Shared chrome fills so buttons/tabs restyle from one place.
+const auto buttonBg     = juce::Colour::fromRGB(43, 48, 58);    // neutral button fill
+const auto buttonRaised = juce::Colour::fromRGB(52, 58, 72);    // emphasized button fill
+const auto onAccentText = juce::Colour::fromRGB(10, 14, 18);    // dark text on lit accents
+
+// Functional zone hues colour-code the rack the way Massive groups its sections:
+// source cyan, shaping amber, performance blue, modulation magenta, utility slate.
+const auto zoneSource   = accent;                               // oscillators / tone
+const auto zoneShape    = staged;                               // filter / envelopes / LFO
+const auto zonePerform  = info;                                 // voice / amp / ramp / macros
+const auto zoneMod      = juce::Colour::fromRGB(224, 108, 218); // modulation routes
+const auto zoneUtility  = juce::Colour::fromRGB(106, 116, 132); // browser / MIDI
 
 constexpr float rotaryStart = juce::MathConstants<float>::pi * 1.25f;
 constexpr float rotaryEnd   = juce::MathConstants<float>::pi * 2.75f;
@@ -159,7 +163,7 @@ void styleFlatButton(juce::Button& button, juce::Colour fill, juce::Colour textC
     button.setColour(juce::TextButton::buttonColourId, fill);
     button.setColour(juce::TextButton::buttonOnColourId, accent.darker(0.1f));
     button.setColour(juce::TextButton::textColourOffId, textColour);
-    button.setColour(juce::TextButton::textColourOnId, juce::Colour::fromRGB(28, 21, 12));
+    button.setColour(juce::TextButton::textColourOnId, onAccentText);
 }
 
 void styleChipCaption(juce::Label& label)
@@ -189,52 +193,272 @@ void styleTextEditor(juce::TextEditor& editor)
 }
 
 // Draws the small rounded zone tick at the left of a module header so every panel reads
-// as a labelled module in a rack. Dimmed when the module's power toggle is off.
+// as a labelled module in a colour-coded rack (Massive-style section identity).
+// Dimmed when the module's power toggle is off.
 void paintModuleHeaderTick(juce::Graphics& g, juce::Rectangle<int> headerArea,
                            juce::Colour colour, bool enabled = true)
 {
-    // Sylenth module captions carry no coloured zone tick, so this is intentionally a no-op.
-    // Kept (and still called) so the functional-zone hues stay wired and easy to reinstate.
-    juce::ignoreUnused(g, headerArea, colour, enabled);
+    const auto tick = juce::Rectangle<float>(static_cast<float>(headerArea.getX()) + 6.0f,
+                                             static_cast<float>(headerArea.getY()) + 7.0f,
+                                             3.0f,
+                                             static_cast<float>(headerArea.getHeight()) - 14.0f);
+    g.setColour(enabled ? colour : colour.withAlpha(0.30f));
+    g.fillRoundedRectangle(tick, 1.5f);
 }
 
-// Fills a module caption bar with a soft top-down gradient and a 1px base divider so each
-// panel reads as a defined titled module (the Sylenth caption-bar rhythm) rather than a
-// flat header. Squares the lower corners so the caption meets the panel body cleanly.
+// Flat module caption strip with a hairline base divider, squared to meet the body.
 void paintCaptionBar(juce::Graphics& g, juce::Rectangle<int> header, bool enabled = true)
 {
-    const auto full = header;
-    const auto base = enabled ? panelHeader : panelHeader.darker(0.14f);
-    // Engraved Sylenth title strip: a darker recessed band across the top of the module with
-    // a thin bright top line and a dark base shadow, squared to meet the plate cleanly.
-    g.setGradientFill(juce::ColourGradient(base.darker(0.02f), 0.0f, static_cast<float>(full.getY()),
-                                           base.darker(0.22f), 0.0f, static_cast<float>(full.getBottom()), false));
-    g.fillRoundedRectangle(full.toFloat().reduced(0.5f), 2.5f);
-    g.fillRect(full.withTop(full.getBottom() - 6));
-    g.setColour(stroke.withAlpha(0.28f));
-    g.fillRect(full.getX() + 2, full.getY() + 1, full.getWidth() - 4, 1);
-    g.setColour(juce::Colours::black.withAlpha(0.42f));
-    g.fillRect(full.getX() + 1, full.getBottom() - 1, full.getWidth() - 2, 1);
+    const auto base = enabled ? panelHeader : panelHeader.darker(0.18f);
+    g.setColour(base);
+    g.fillRoundedRectangle(header.toFloat().reduced(0.5f), 5.0f);
+    g.fillRect(header.withTop(header.getBottom() - 6));
+    g.setColour(strokeSoft);
+    g.fillRect(header.getX() + 1, header.getBottom() - 1, header.getWidth() - 2, 1);
 }
 
-// Brushed-metal module body: a vertical gradient with a soft brass border, so panels read
-// as raised metal plates rather than flat cards. Shared by every titled module.
+// Flat module card with a single hairline border. Shared by every titled module.
 void paintPanelBody(juce::Graphics& g, juce::Rectangle<float> bounds)
 {
-    // A raised brushed-metal plate (squared corners, like a Sylenth module) rather than a
-    // floating rounded card: bright top edge, dark base shadow, thin dark outer seam so
-    // tightly-packed panels read as one carved faceplate.
-    g.setGradientFill(juce::ColourGradient(panelBg.brighter(0.13f), 0.0f, bounds.getY(),
-                                           panelBg.darker(0.16f), 0.0f, bounds.getBottom(), false));
-    g.fillRoundedRectangle(bounds, 2.5f);
-    g.setColour(juce::Colours::black.withAlpha(0.42f));
-    g.drawRoundedRectangle(bounds, 2.5f, 1.0f);
-    g.setColour(stroke.withAlpha(0.5f));
-    g.drawLine(bounds.getX() + 2.0f, bounds.getY() + 1.2f, bounds.getRight() - 2.0f, bounds.getY() + 1.2f, 1.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.28f));
-    g.drawLine(bounds.getX() + 2.0f, bounds.getBottom() - 1.0f, bounds.getRight() - 2.0f, bounds.getBottom() - 1.0f, 1.0f);
+    g.setColour(panelBg);
+    g.fillRoundedRectangle(bounds, 5.0f);
+    g.setColour(strokeSoft);
+    g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
 }
+
+constexpr const char* modSourceDragPrefix = "modsource:";
 } // namespace
+
+// ============================================================================
+// ModTargetSlider: a knob that is also a modulation drop target.
+//
+// Knobs whose parameter is a TransMod destination accept mod-source chips
+// dragged from the source strip; a magenta halo arc around the knob shows each
+// route's modulated range (the Serum-style ring). Alt-drag the knob to adjust
+// the first route's depth, right-click to list or clear routes. Routes are
+// real transmod.* state via the editor-wired callbacks — nothing local.
+// ============================================================================
+class SynthAudioProcessorEditor::ModTargetSlider final : public juce::Slider,
+                                                         public juce::DragAndDropTarget
+{
+public:
+    struct RouteDisplay
+    {
+        int slotNumber = 0;
+        float depth = 0.0f;
+        bool bipolarSource = false;
+        bool lfoSource = false;
+        juce::String label;
+
+        bool operator==(const RouteDisplay& other) const noexcept
+        {
+            return slotNumber == other.slotNumber
+                && std::abs(depth - other.depth) < 0.0001f
+                && bipolarSource == other.bipolarSource
+                && lfoSource == other.lfoSource
+                && label == other.label;
+        }
+    };
+
+    std::function<void(const juce::String& sourceId)> onModSourceDropped;
+    std::function<void(int slotNumber, float depth)> onDepthEdited;
+    std::function<void(int slotNumber)> onSlotCleared;
+
+    void setDestinationInfo(const synth::ModulationDestinationInfo* destinationToUse) noexcept
+    {
+        destination = destinationToUse;
+    }
+    bool isModTarget() const noexcept { return destination != nullptr; }
+    const synth::ModulationDestinationInfo* destinationInfo() const noexcept { return destination; }
+
+    void setRouteDisplays(std::vector<RouteDisplay> newRoutes)
+    {
+        if (newRoutes == routes)
+            return;
+        routes = std::move(newRoutes);
+        repaint();
+    }
+
+    // Live LFO value from the processor feed animates the halo dot for
+    // LFO-sourced routes; cleared when no voice is sounding.
+    void setLiveLfo(bool active, float value)
+    {
+        const auto changed = active != liveLfoActive
+            || (active && std::abs(value - liveLfoValue) > 0.005f);
+        liveLfoActive = active;
+        liveLfoValue = value;
+        if (changed && hasLfoRoute())
+            repaint();
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        juce::Slider::paint(g);
+        if (!isModTarget())
+            return;
+
+        const auto layout = getLookAndFeel().getSliderLayout(*this);
+        const auto bounds = layout.sliderBounds.toFloat().reduced(3.0f);
+        const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
+        const auto centreX = bounds.getCentreX();
+        const auto centreY = bounds.getCentreY();
+        const auto rotary = getRotaryParameters();
+
+        const auto angleFor = [this, &rotary](double value) {
+            const auto clamped = juce::jlimit(getMinimum(), getMaximum(), value);
+            const auto proportion = static_cast<float>(valueToProportionOfLength(clamped));
+            return rotary.startAngleRadians
+                + proportion * (rotary.endAngleRadians - rotary.startAngleRadians);
+        };
+
+        if (dragHover)
+        {
+            g.setColour(zoneMod.withAlpha(0.18f));
+            g.fillEllipse(bounds.withSizeKeepingCentre(radius * 2.0f, radius * 2.0f));
+        }
+
+        const auto value = getValue();
+        auto haloRadius = radius + 1.0f;
+        for (const auto& route : routes)
+        {
+            const auto magnitude = std::abs(route.depth);
+            const auto lower = route.bipolarSource ? value - magnitude : juce::jmin(value, value + route.depth);
+            const auto upper = route.bipolarSource ? value + magnitude : juce::jmax(value, value + route.depth);
+            juce::Path halo;
+            halo.addCentredArc(centreX, centreY, haloRadius, haloRadius, 0.0f,
+                               angleFor(lower), angleFor(upper), true);
+            g.setColour(zoneMod.withAlpha(0.85f));
+            g.strokePath(halo, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded));
+
+            if (route.lfoSource && liveLfoActive)
+            {
+                const auto angle = angleFor(value + static_cast<double>(liveLfoValue) * route.depth);
+                const auto dotX = centreX + haloRadius * std::sin(angle);
+                const auto dotY = centreY - haloRadius * std::cos(angle);
+                g.setColour(text);
+                g.fillEllipse(dotX - 2.2f, dotY - 2.2f, 4.4f, 4.4f);
+            }
+
+            haloRadius -= 3.0f;
+        }
+
+        if (dragHover)
+        {
+            g.setColour(zoneMod);
+            g.drawEllipse(bounds.withSizeKeepingCentre(radius * 2.0f + 3.0f, radius * 2.0f + 3.0f), 1.6f);
+        }
+    }
+
+    bool isInterestedInDragSource(const SourceDetails& details) override
+    {
+        return isModTarget() && details.description.toString().startsWith(modSourceDragPrefix);
+    }
+
+    void itemDragEnter(const SourceDetails&) override
+    {
+        dragHover = true;
+        repaint();
+    }
+
+    void itemDragExit(const SourceDetails&) override
+    {
+        dragHover = false;
+        repaint();
+    }
+
+    void itemDropped(const SourceDetails& details) override
+    {
+        dragHover = false;
+        repaint();
+        const auto sourceId = details.description.toString()
+                                  .fromFirstOccurrenceOf(modSourceDragPrefix, false, false);
+        if (onModSourceDropped != nullptr && sourceId.isNotEmpty())
+            onModSourceDropped(sourceId);
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        if (isModTarget() && !routes.empty() && event.mods.isPopupMenu())
+        {
+            showRouteMenu();
+            return;
+        }
+
+        if (isModTarget() && !routes.empty() && event.mods.isAltDown())
+        {
+            depthDragActive = true;
+            depthDragStart = routes.front().depth;
+            return;
+        }
+
+        juce::Slider::mouseDown(event);
+    }
+
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        if (depthDragActive)
+        {
+            if (destination != nullptr && onDepthEdited != nullptr)
+            {
+                const auto range = destination->maximumDepth - destination->minimumDepth;
+                auto depth = depthDragStart
+                    - static_cast<float>(event.getDistanceFromDragStartY()) * range / 360.0f;
+                depth = juce::jlimit(destination->minimumDepth, destination->maximumDepth, depth);
+                if (std::abs(depth) < 0.001f)
+                    depth = depth < 0.0f ? -0.001f : 0.001f; // write adapter rejects zero depth
+                onDepthEdited(routes.front().slotNumber, depth);
+            }
+            return;
+        }
+
+        juce::Slider::mouseDrag(event);
+    }
+
+    void mouseUp(const juce::MouseEvent& event) override
+    {
+        if (depthDragActive)
+        {
+            depthDragActive = false;
+            return;
+        }
+
+        juce::Slider::mouseUp(event);
+    }
+
+private:
+    bool hasLfoRoute() const noexcept
+    {
+        return std::any_of(routes.begin(), routes.end(),
+                           [](const RouteDisplay& route) { return route.lfoSource; });
+    }
+
+    void showRouteMenu()
+    {
+        juce::PopupMenu menu;
+        for (std::size_t i = 0; i < routes.size(); ++i)
+        {
+            const auto& route = routes[i];
+            menu.addItem(static_cast<int>(i) + 1,
+                         "Clear slot " + juce::String(route.slotNumber) + ":  " + route.label);
+        }
+
+        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+                           [this](int result) {
+                               const auto index = static_cast<std::size_t>(result - 1);
+                               if (result > 0 && index < routes.size() && onSlotCleared != nullptr)
+                                   onSlotCleared(routes[index].slotNumber);
+                           });
+    }
+
+    const synth::ModulationDestinationInfo* destination = nullptr;
+    std::vector<RouteDisplay> routes;
+    bool dragHover = false;
+    bool depthDragActive = false;
+    float depthDragStart = 0.0f;
+    bool liveLfoActive = false;
+    float liveLfoValue = 0.0f;
+};
 
 // ============================================================================
 // Look and feel: modern rotary knobs, switch toggles, flat combos and buttons.
@@ -244,6 +468,7 @@ class SynthAudioProcessorEditor::SynthLookAndFeel final : public juce::LookAndFe
 public:
     SynthLookAndFeel()
     {
+        setColour(juce::Slider::rotarySliderFillColourId, accent);
         setColour(juce::Slider::textBoxTextColourId, text);
         setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
         setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -253,10 +478,10 @@ public:
         setColour(juce::ComboBox::textColourId, text);
         setColour(juce::ComboBox::arrowColourId, accent);
 
-        setColour(juce::PopupMenu::backgroundColourId, juce::Colour::fromRGB(74, 62, 45));
+        setColour(juce::PopupMenu::backgroundColourId, panelHeader);
         setColour(juce::PopupMenu::textColourId, text);
         setColour(juce::PopupMenu::highlightedBackgroundColourId, accent.darker(0.2f));
-        setColour(juce::PopupMenu::highlightedTextColourId, juce::Colour::fromRGB(28, 21, 12));
+        setColour(juce::PopupMenu::highlightedTextColourId, onAccentText);
 
         setColour(juce::TextEditor::backgroundColourId, fieldBg);
         setColour(juce::TextEditor::outlineColourId, stroke);
@@ -266,7 +491,7 @@ public:
 
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPos, float startAngle, float endAngle,
-                          juce::Slider&) override
+                          juce::Slider& slider) override
     {
         const auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(3.0f);
         const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
@@ -274,61 +499,56 @@ public:
         const auto centreY = bounds.getCentreY();
         const auto toAngle = startAngle + sliderPos * (endAngle - startAngle);
 
-        // Sylenth metal knob: a dark charcoal cap in a chrome rim, value shown by the white
-        // pointer alone — no lit colour arc (the hardware knob has none). A faint radial tick
-        // ring sits just outside the cap for the at-a-glance read.
-        const auto capRadius = radius - 1.0f;
+        // Modern flat knob: a matte cap inside a lit value arc. The arc colour is
+        // per-control (rotarySliderFillColourId) so each zone can tint its knobs;
+        // bipolar ranges anchor the arc at their zero point instead of the minimum.
+        const auto arcColour = slider.findColour(juce::Slider::rotarySliderFillColourId);
+        const auto lit = slider.isEnabled();
+        const auto hot = slider.isMouseOverOrDragging() && lit;
+        const auto arcRadius = radius - 1.5f;
+        const auto arcWidth = juce::jmax(2.0f, radius * 0.14f);
 
-        const auto tickInner = capRadius + 1.5f;
-        const auto tickOuter = capRadius + (radius > 16.0f ? 4.5f : 3.0f);
-        constexpr int tickCount = 11;
-        for (int i = 0; i < tickCount; ++i)
+        juce::Path track;
+        track.addCentredArc(centreX, centreY, arcRadius, arcRadius, 0.0f, startAngle, endAngle, true);
+        g.setColour(strokeSoft.withAlpha(lit ? 0.9f : 0.5f));
+        g.strokePath(track, juce::PathStrokeType(arcWidth, juce::PathStrokeType::curved,
+                                                 juce::PathStrokeType::rounded));
+
+        auto anchorPos = 0.0f;
+        const auto minimum = slider.getMinimum();
+        const auto maximum = slider.getMaximum();
+        if (minimum < 0.0 && maximum > 0.0)
+            anchorPos = static_cast<float>(-minimum / (maximum - minimum));
+        const auto anchorAngle = startAngle + anchorPos * (endAngle - startAngle);
+
+        if (std::abs(toAngle - anchorAngle) > 0.01f)
         {
-            const auto t = static_cast<float>(i) / static_cast<float>(tickCount - 1);
-            const auto angle = startAngle + t * (endAngle - startAngle);
-            const auto extreme = (i == 0 || i == tickCount - 1);
-            const auto sinA = std::sin(angle);
-            const auto cosA = std::cos(angle);
-            g.setColour(juce::Colour::fromRGB(206, 188, 150).withAlpha(extreme ? 0.5f : 0.18f));
-            g.drawLine(centreX + tickInner * sinA, centreY - tickInner * cosA,
-                       centreX + tickOuter * sinA, centreY - tickOuter * cosA, extreme ? 1.3f : 0.9f);
+            juce::Path arc;
+            arc.addCentredArc(centreX, centreY, arcRadius, arcRadius, 0.0f,
+                              juce::jmin(anchorAngle, toAngle), juce::jmax(anchorAngle, toAngle), true);
+            g.setColour(lit ? (hot ? arcColour.brighter(0.25f) : arcColour) : mutedText.withAlpha(0.4f));
+            g.strokePath(arc, juce::PathStrokeType(arcWidth, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
         }
 
-        // Recessed socket shadow the cap sits in.
-        g.setColour(juce::Colours::black.withAlpha(0.5f));
-        g.drawEllipse(juce::Rectangle<float>(centreX - capRadius, centreY - capRadius,
-                                             capRadius * 2.0f, capRadius * 2.0f), 1.4f);
+        // Matte cap with a hairline rim and a soft top sheen.
+        const auto capRadius = arcRadius - arcWidth - 1.5f;
+        const auto capBox = juce::Rectangle<float>(centreX - capRadius, centreY - capRadius,
+                                                   capRadius * 2.0f, capRadius * 2.0f);
+        g.setColour(lit ? knobFill : knobFill.darker(0.2f));
+        g.fillEllipse(capBox);
+        g.setColour(knobStroke.withAlpha(lit ? 1.0f : 0.6f));
+        g.drawEllipse(capBox, 1.0f);
+        g.setColour(juce::Colours::white.withAlpha(0.05f));
+        g.fillEllipse(capBox.reduced(capRadius * 0.18f).withTrimmedBottom(capRadius * 1.1f));
 
-        // Chrome rim around the cap.
-        const auto rimRadius = capRadius - 1.5f;
-        const auto rimBox = juce::Rectangle<float>(centreX - rimRadius, centreY - rimRadius,
-                                                   rimRadius * 2.0f, rimRadius * 2.0f);
-        juce::ColourGradient rimGrad(knobStroke.brighter(0.30f), centreX, centreY - rimRadius,
-                                     knobStroke.darker(0.55f), centreX, centreY + rimRadius, false);
-        g.setGradientFill(rimGrad);
-        g.fillEllipse(rimBox);
-
-        // Charcoal body with a top-lit gradient and a specular sheen.
-        const auto bodyRadius = rimRadius - juce::jmax(1.8f, rimRadius * 0.16f);
-        const auto bodyBox = juce::Rectangle<float>(centreX - bodyRadius, centreY - bodyRadius,
-                                                    bodyRadius * 2.0f, bodyRadius * 2.0f);
-        juce::ColourGradient bodyGrad(knobFill.brighter(0.45f), centreX, centreY - bodyRadius,
-                                      knobFill.darker(0.40f), centreX, centreY + bodyRadius, false);
-        g.setGradientFill(bodyGrad);
-        g.fillEllipse(bodyBox);
-        g.setColour(juce::Colours::black.withAlpha(0.40f));
-        g.drawEllipse(bodyBox, 1.0f);
-        g.setColour(juce::Colours::white.withAlpha(0.12f));
-        g.fillEllipse(bodyBox.reduced(bodyRadius * 0.22f).translated(0.0f, -bodyRadius * 0.44f));
-
-        // White indicator pointer with a cap dot.
-        const juce::Point<float> tip(centreX + (bodyRadius - 2.0f) * std::sin(toAngle),
-                                     centreY - (bodyRadius - 2.0f) * std::cos(toAngle));
-        const juce::Point<float> root(centreX + (bodyRadius * 0.30f) * std::sin(toAngle),
-                                      centreY - (bodyRadius * 0.30f) * std::cos(toAngle));
-        g.setColour(juce::Colour::fromRGB(245, 240, 228));
-        g.drawLine({ root, tip }, juce::jmax(2.0f, radius * 0.13f));
-        g.fillEllipse(tip.x - 1.6f, tip.y - 1.6f, 3.2f, 3.2f);
+        // Value pointer.
+        const juce::Point<float> tip(centreX + (capRadius - 2.0f) * std::sin(toAngle),
+                                     centreY - (capRadius - 2.0f) * std::cos(toAngle));
+        const juce::Point<float> root(centreX + (capRadius * 0.35f) * std::sin(toAngle),
+                                      centreY - (capRadius * 0.35f) * std::cos(toAngle));
+        g.setColour(lit ? text : mutedText);
+        g.drawLine({ root, tip }, juce::jmax(1.8f, radius * 0.10f));
     }
 
     void drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
@@ -336,27 +556,22 @@ public:
     {
         auto bounds = button.getLocalBounds().toFloat();
         const auto on = button.getToggleState();
-        const auto boxWidth = juce::jmin(bounds.getWidth(), 46.0f);
-        const auto boxHeight = juce::jmin(bounds.getHeight(), 22.0f);
+        const auto boxWidth = juce::jmin(bounds.getWidth(), 40.0f);
+        const auto boxHeight = juce::jmin(bounds.getHeight(), 18.0f);
         auto box = juce::Rectangle<float>(boxWidth, boxHeight).withCentre(bounds.getCentre());
+        const auto corner = box.getHeight() * 0.5f;
 
-        // Sylenth-style lit LED button: a recessed socket that glows amber when engaged.
-        g.setColour(fieldBg);
-        g.fillRoundedRectangle(box, 4.0f);
-
-        if (on)
-        {
-            juce::ColourGradient glow(staged.brighter(0.30f), box.getX(), box.getY(),
-                                      staged.darker(0.24f), box.getX(), box.getBottom(), false);
-            g.setGradientFill(glow);
-            g.fillRoundedRectangle(box.reduced(1.6f), 3.0f);
-            g.setColour(juce::Colours::white.withAlpha(0.20f));
-            g.fillRoundedRectangle(box.reduced(1.6f).withTrimmedBottom(boxHeight * 0.5f), 3.0f);
-        }
-
+        // Pill switch: lit accent track with a sliding thumb, hairline when off.
+        g.setColour(on ? accent.withAlpha(0.85f) : fieldBg);
+        g.fillRoundedRectangle(box, corner);
         g.setColour(on ? accent.brighter(0.1f)
                        : (shouldDrawButtonAsHighlighted ? mutedText : stroke.withAlpha(0.8f)));
-        g.drawRoundedRectangle(box.reduced(0.5f), 4.0f, 1.2f);
+        g.drawRoundedRectangle(box.reduced(0.5f), corner, 1.1f);
+
+        const auto thumbDiameter = box.getHeight() - 5.0f;
+        const auto thumbX = on ? box.getRight() - thumbDiameter - 2.5f : box.getX() + 2.5f;
+        g.setColour(on ? onAccentText : mutedText);
+        g.fillEllipse(thumbX, box.getCentreY() - thumbDiameter * 0.5f, thumbDiameter, thumbDiameter);
     }
 
     void drawComboBox(juce::Graphics& g, int width, int height, bool,
@@ -465,8 +680,17 @@ public:
         {
             slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             slider.setRotaryParameters(rotaryStart, rotaryEnd, true);
-            // Small recessed value readout under the knob, the way Sylenth tucks a dark value
-            // box beneath each control rather than a wide editor field.
+            // Knobs bound to a TransMod destination become modulation drop
+            // targets with halo rings; the catalog is the source of truth.
+            for (const auto& destination : synth::modulationDestinationCatalog())
+            {
+                if (destination.targetParameterId == spec.id)
+                {
+                    slider.setDestinationInfo(&destination);
+                    break;
+                }
+            }
+            // Small recessed value readout under the knob.
             slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 60, 15);
             slider.setColour(juce::Slider::textBoxTextColourId, text);
             slider.setColour(juce::Slider::textBoxBackgroundColourId, fieldBg.withAlpha(0.55f));
@@ -486,6 +710,20 @@ public:
 
     bool isWide() const noexcept { return wide; }
 
+    // Zone hue for this control's value arc, so each module's knobs carry the
+    // rack's colour coding.
+    void setAccentColour(juce::Colour colour)
+    {
+        if (!colour.isTransparent())
+            slider.setColour(juce::Slider::rotarySliderFillColourId, colour);
+    }
+
+    // Non-null when this control's knob is a modulation drop target.
+    ModTargetSlider* modTarget() noexcept
+    {
+        return spec.kind == synth::ParameterKind::Float && slider.isModTarget() ? &slider : nullptr;
+    }
+
     void resized() override
     {
         auto bounds = getLocalBounds();
@@ -503,7 +741,7 @@ private:
     synth::ParameterSpec spec;
     bool wide = false;
     juce::Label nameLabel;
-    juce::Slider slider;
+    ModTargetSlider slider;
     juce::ComboBox combo;
     juce::ToggleButton toggle;
     std::unique_ptr<SliderAttachment> sliderAttachment;
@@ -582,9 +820,16 @@ private:
 // Read-only display of real state: the current preset name plus its source /
 // bank / category, and the dirty flag. No new control or stored state.
 // ============================================================================
-class SynthAudioProcessorEditor::LcdDisplay final : public LayoutSection
+class SynthAudioProcessorEditor::LcdDisplay final : public LayoutSection,
+                                                    private juce::Timer
 {
 public:
+    explicit LcdDisplay(SynthAudioProcessor& processor)
+        : audioProcessor(processor)
+    {
+        startTimerHz(30);
+    }
+
     int preferredHeight(int) const override { return 188; }
 
     void setPreset(const juce::String& name, const juce::String& detail)
@@ -644,16 +889,13 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        // Tan-metal bezel around a recessed glossy blue screen — the Sylenth centre display
-        // and the surface's primary readout hub (preset name, program slot, live state).
+        // Flat bezel around a recessed glass screen — the surface's primary readout
+        // hub (preset name, program slot, live state, output scope).
         auto bezel = getLocalBounds().toFloat().reduced(0.5f);
-        g.setGradientFill(juce::ColourGradient(panelBg.brighter(0.10f), 0.0f, bezel.getY(),
-                                               panelBg.darker(0.22f), 0.0f, bezel.getBottom(), false));
-        g.fillRoundedRectangle(bezel, 8.0f);
-        g.setColour(juce::Colours::black.withAlpha(0.4f));
-        g.drawRoundedRectangle(bezel.reduced(3.0f), 6.0f, 1.0f); // inner shadow groove
-        g.setColour(stroke);
-        g.drawRoundedRectangle(bezel, 8.0f, 1.0f);
+        g.setColour(panelBg);
+        g.fillRoundedRectangle(bezel, 6.0f);
+        g.setColour(strokeSoft);
+        g.drawRoundedRectangle(bezel, 6.0f, 1.0f);
 
         auto screen = bezel.reduced(8.0f);
         g.setGradientFill(juce::ColourGradient(lcdBg.brighter(0.20f), 0.0f, screen.getY(),
@@ -701,6 +943,40 @@ public:
         // Name + detail block fills the space between the header and the readout strip.
         auto block = content.reduced(0, 4);
         auto nameArea = block.removeFromTop(juce::jmin(42, juce::jmax(24, block.getHeight() - 22)));
+
+        // Live output scope behind the text: the real rendered signal pulled from
+        // the processor's lock-free ring, drawn as a faint trace so the display
+        // breathes with the sound (flat centre line when idle).
+        {
+            const auto trace = juce::Rectangle<float>(static_cast<float>(content.getX()),
+                                                      static_cast<float>(nameArea.getY()),
+                                                      static_cast<float>(content.getWidth()),
+                                                      static_cast<float>(block.getBottom() - nameArea.getY()));
+            const auto midY = trace.getCentreY();
+            juce::Path wave;
+            if (scopeCount > 1)
+            {
+                for (int i = 0; i < scopeCount; ++i)
+                {
+                    const auto x = trace.getX()
+                        + trace.getWidth() * static_cast<float>(i) / static_cast<float>(scopeCount - 1);
+                    const auto sample = juce::jlimit(-1.0f, 1.0f, scope[static_cast<std::size_t>(i)]);
+                    const auto y = midY - sample * trace.getHeight() * 0.48f;
+                    if (i == 0)
+                        wave.startNewSubPath(x, y);
+                    else
+                        wave.lineTo(x, y);
+                }
+                g.setColour(lcdText.withAlpha(0.30f));
+                g.strokePath(wave, juce::PathStrokeType(1.2f));
+            }
+            else
+            {
+                g.setColour(lcdText.withAlpha(0.14f));
+                g.drawHorizontalLine(juce::roundToInt(midY), trace.getX(), trace.getRight());
+            }
+        }
+
         g.setColour(lcdText);
         g.setFont(lcdFont(26.0f, true));
         g.drawFittedText(presetName.isNotEmpty() ? presetName : "Init", nameArea,
@@ -723,6 +999,17 @@ public:
     }
 
 private:
+    void timerCallback() override
+    {
+        if (!isShowing())
+            return;
+        scopeCount = audioProcessor.readScopeSamples(scope.data(), static_cast<int>(scope.size()));
+        repaint();
+    }
+
+    SynthAudioProcessor& audioProcessor;
+    std::array<float, 512> scope {};
+    int scopeCount = 0;
     juce::String presetName { "Init" };
     juce::String presetDetail { "Unsaved session" };
     juce::String programText;
@@ -894,6 +1181,7 @@ public:
             if (const auto* found = synth::findParameterSpec(id))
             {
                 auto control = std::make_unique<ParameterControl>(state, *found, stripPrefix);
+                control->setAccentColour(badgeColour);
                 addAndMakeVisible(*control);
                 controls.push_back(std::move(control));
             }
@@ -903,6 +1191,15 @@ public:
     int preferredHeight(int width) const override
     {
         return computeLayout(width, false);
+    }
+
+    // Gathers the knobs that accept modulation drops so the editor can wire
+    // route callbacks and push halo state.
+    void collectModTargets(std::vector<ModTargetSlider*>& out)
+    {
+        for (auto& control : controls)
+            if (auto* target = control->modTarget())
+                out.push_back(target);
     }
 
     // True when this panel carries a module power toggle that drives its dimmed state.
@@ -952,7 +1249,7 @@ public:
             auto dotArea = titleArea.removeFromLeft(14);
             const auto dot = juce::Rectangle<float>(0.0f, 0.0f, 7.0f, 7.0f)
                                  .withCentre(dotArea.toFloat().getCentre());
-            g.setColour(on ? live : juce::Colour::fromRGB(120, 106, 80));
+            g.setColour(on ? live : stroke);
             g.fillEllipse(dot);
         }
 
@@ -1182,7 +1479,8 @@ private:
             return;
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         s.setRotaryParameters(rotaryStart, rotaryEnd, true);
-        s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0); // Sylenth osc knobs label only
+        s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0); // osc knobs label only
+        s.setColour(juce::Slider::rotarySliderFillColourId, zoneSource);
         tagSliderReadout(s, id, juce::String(spec->name));
         sliderAttachments.push_back(std::make_unique<SliderAttachment>(state, id, s));
         const auto sp = *spec;
@@ -1290,6 +1588,13 @@ public:
         if (on != lastEnabled) { lastEnabled = on; repaint(); }
     }
 
+    void collectModTargets(std::vector<ModTargetSlider*>& out)
+    {
+        for (auto* knob : { &cutoff, &resonance, &drive, &keytrack })
+            if (knob->isModTarget())
+                out.push_back(knob);
+    }
+
     void paint(juce::Graphics& g) override
     {
         const auto on = isModuleEnabled();
@@ -1349,7 +1654,7 @@ public:
     }
 
 private:
-    void setupKnob(juce::Slider& s, juce::AudioProcessorValueTreeState& state, const std::string& id)
+    void setupKnob(ModTargetSlider& s, juce::AudioProcessorValueTreeState& state, const std::string& id)
     {
         const auto* spec = synth::findParameterSpec(id);
         if (spec == nullptr)
@@ -1357,6 +1662,15 @@ private:
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         s.setRotaryParameters(rotaryStart, rotaryEnd, true);
         s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        s.setColour(juce::Slider::rotarySliderFillColourId, zoneShape);
+        for (const auto& destination : synth::modulationDestinationCatalog())
+        {
+            if (destination.targetParameterId == id)
+            {
+                s.setDestinationInfo(&destination);
+                break;
+            }
+        }
         tagSliderReadout(s, id, juce::String(spec->name));
         sliderAttachments.push_back(std::make_unique<SliderAttachment>(state, id, s));
         const auto sp = *spec;
@@ -1381,7 +1695,7 @@ private:
     std::atomic<float>* enabledParam = nullptr;
     bool lastEnabled = true;
 
-    juce::Slider cutoff, resonance, drive, keytrack;
+    ModTargetSlider cutoff, resonance, drive, keytrack;
     juce::ComboBox typeBox, qualityBox;
     juce::ToggleButton enableToggle;
 
@@ -1560,7 +1874,7 @@ private:
     void paintContour(juce::Graphics& g, juce::Rectangle<int> area) const
     {
         const auto frame = area.toFloat().reduced(0.5f);
-        g.setColour(juce::Colour::fromRGB(26, 20, 13));
+        g.setColour(fieldBg);
         g.fillRoundedRectangle(frame, 4.0f);
         g.setColour(strokeSoft.withAlpha(0.8f));
         g.drawRoundedRectangle(frame, 4.0f, 1.0f);
@@ -1622,6 +1936,512 @@ private:
     juce::String title;
     juce::Colour zone;
     std::array<Stage, stageCount> stages;
+};
+
+// ============================================================================
+// LfoModulePanel: the LFO as a visual instrument, not a form.
+//
+// Controls bind to the real lfo.* parameters on the left; the right half is a
+// live display. Classic shapes render their waveform; the Step shape becomes a
+// drawable 16-bar grid (drag to draw, double-click a bar to zero it) bound to
+// the real lfo.step.* parameters. A playhead and value dot ride the display
+// from the processor's lock-free visual feed whenever voices are sounding.
+// ============================================================================
+class SynthAudioProcessorEditor::LfoModulePanel final : public LayoutSection,
+                                                        private juce::Timer
+{
+public:
+    explicit LfoModulePanel(SynthAudioProcessor& processor)
+        : audioProcessor(processor)
+    {
+        auto& state = audioProcessor.getValueTreeState();
+        for (const auto* id : { "lfo.shape", "lfo.rate_mode", "lfo.rate_hz", "lfo.sync_division",
+                                "lfo.phase_degrees", "lfo.gate_mode", "lfo.mono", "lfo.swing",
+                                "lfo.step_count", "lfo.step_smooth" })
+        {
+            if (const auto* spec = synth::findParameterSpec(id))
+            {
+                auto control = std::make_unique<ParameterControl>(state, *spec, "LFO ");
+                control->setAccentColour(zoneShape);
+                addAndMakeVisible(*control);
+                controls.push_back(std::move(control));
+            }
+        }
+
+        shapeValue = state.getRawParameterValue("lfo.shape");
+        phaseValue = state.getRawParameterValue("lfo.phase_degrees");
+        stepCountValue = state.getRawParameterValue("lfo.step_count");
+        for (int step = 0; step < synth::lfoStepSlotCount; ++step)
+        {
+            const auto id = "lfo.step." + std::to_string(step + 1);
+            stepValues[static_cast<std::size_t>(step)] = state.getRawParameterValue(id);
+            stepParameters[static_cast<std::size_t>(step)] = state.getParameter(id);
+        }
+
+        startTimerHz(30);
+    }
+
+    ~LfoModulePanel() override
+    {
+        endStepGesture();
+    }
+
+    int preferredHeight(int) const override { return captionH + bodyHeight + 2 * padY; }
+
+    void paint(juce::Graphics& g) override
+    {
+        paintPanelBody(g, getLocalBounds().toFloat().reduced(0.5f));
+        auto header = getLocalBounds().removeFromTop(captionH);
+        paintCaptionBar(g, header);
+        paintModuleHeaderTick(g, header, zoneShape);
+
+        auto titleArea = header.reduced(16, 0);
+        const auto stepMode = isStepMode();
+        if (stepMode)
+        {
+            auto badgeArea = titleArea.removeFromRight(52).withSizeKeepingCentre(52, 16);
+            g.setColour(zoneShape.withAlpha(0.2f));
+            g.fillRoundedRectangle(badgeArea.toFloat(), 8.0f);
+            g.setColour(zoneShape);
+            g.setFont(uiFont(10.0f, true));
+            g.drawText("STEP", badgeArea, juce::Justification::centred, false);
+        }
+        g.setColour(text);
+        g.setFont(uiFont(12.0f, true));
+        g.drawText("LFO", titleArea, juce::Justification::centred, true);
+
+        paintDisplay(g);
+    }
+
+    void resized() override
+    {
+        auto area = getLocalBounds();
+        area.removeFromTop(captionH);
+        area = area.reduced(padX, padY);
+
+        displayArea = area.removeFromRight(juce::jmax(170, area.getWidth() * 9 / 20)).reduced(2, 0);
+        area.removeFromRight(8);
+
+        // Compact control grid in the remaining left half.
+        const auto columns = juce::jmax(2, (area.getWidth() + cellGap) / (cellWidth + cellGap));
+        const auto columnWidth = (area.getWidth() - (columns - 1) * cellGap) / columns;
+        int column = 0;
+        int row = 0;
+        for (const auto& control : controls)
+        {
+            const auto span = juce::jmin(control->isWide() ? 2 : 1, columns);
+            if (column + span > columns)
+            {
+                column = 0;
+                ++row;
+            }
+            control->setBounds(area.getX() + column * (columnWidth + cellGap),
+                               area.getY() + row * (cellHeight + rowGap),
+                               span * columnWidth + (span - 1) * cellGap, cellHeight);
+            column += span;
+        }
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override { handleStepEdit(event, true); }
+    void mouseDrag(const juce::MouseEvent& event) override { handleStepEdit(event, false); }
+    void mouseUp(const juce::MouseEvent&) override { endStepGesture(); }
+
+    void mouseDoubleClick(const juce::MouseEvent& event) override
+    {
+        if (!isStepMode() || !displayArea.contains(event.getPosition()))
+            return;
+        const auto step = stepIndexAt(event.position.x);
+        if (auto* parameter = step >= 0 ? stepParameters[static_cast<std::size_t>(step)] : nullptr)
+        {
+            parameter->beginChangeGesture();
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(0.0f));
+            parameter->endChangeGesture();
+        }
+    }
+
+private:
+    static constexpr int captionH = 26;
+    static constexpr int bodyHeight = 150;
+    static constexpr int padX = 11;
+    static constexpr int padY = 7;
+    static constexpr int cellWidth = 64;
+    static constexpr int cellHeight = 70;
+    static constexpr int cellGap = 6;
+    static constexpr int rowGap = 4;
+
+    bool isStepMode() const
+    {
+        return shapeValue != nullptr
+            && static_cast<int>(std::round(shapeValue->load())) == static_cast<int>(synth::LfoShapeChoice::Step);
+    }
+
+    int activeStepCount() const
+    {
+        const auto raw = stepCountValue != nullptr ? stepCountValue->load() : 8.0f;
+        return juce::jlimit(1, synth::lfoStepSlotCount, static_cast<int>(std::round(raw)));
+    }
+
+    int stepIndexAt(float x) const
+    {
+        const auto plot = displayArea.toFloat().reduced(1.0f);
+        if (plot.getWidth() <= 0.0f)
+            return -1;
+        const auto fraction = (x - plot.getX()) / plot.getWidth();
+        return juce::jlimit(0, activeStepCount() - 1,
+                            static_cast<int>(fraction * static_cast<float>(activeStepCount())));
+    }
+
+    void handleStepEdit(const juce::MouseEvent& event, bool isDown)
+    {
+        if (!isStepMode())
+            return;
+        if (isDown && !displayArea.contains(event.getPosition()))
+            return;
+
+        const auto step = stepIndexAt(event.position.x);
+        auto* parameter = step >= 0 ? stepParameters[static_cast<std::size_t>(step)] : nullptr;
+        if (parameter == nullptr)
+            return;
+
+        if (gestureParameter != parameter)
+        {
+            endStepGesture();
+            gestureParameter = parameter;
+            gestureParameter->beginChangeGesture();
+        }
+
+        const auto plot = displayArea.toFloat().reduced(1.0f);
+        const auto value = juce::jlimit(-1.0f, 1.0f,
+                                        1.0f - 2.0f * (event.position.y - plot.getY()) / plot.getHeight());
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+    }
+
+    void endStepGesture()
+    {
+        if (gestureParameter != nullptr)
+        {
+            gestureParameter->endChangeGesture();
+            gestureParameter = nullptr;
+        }
+    }
+
+    // Waveform preview for the classic shapes; mirrors the DSP shapes closely
+    // enough to read correctly (S&H/Noise draw a deterministic held pattern).
+    float shapeSample(int shape, float phase) const
+    {
+        phase -= std::floor(phase);
+        switch (shape)
+        {
+            case 0: return std::sin(juce::MathConstants<float>::twoPi * phase);
+            case 1: return 1.0f - 4.0f * std::abs(phase - 0.5f);
+            case 2: return 2.0f * phase - 1.0f;
+            case 3: return 1.0f - 2.0f * phase;
+            case 4: return phase < 0.5f ? 1.0f : -1.0f;
+            default:
+            {
+                // Held pseudo-random pattern over 8 segments, fixed seed.
+                static constexpr std::array<float, 8> held {
+                    0.62f, -0.35f, 0.91f, 0.12f, -0.78f, 0.44f, -0.96f, -0.08f
+                };
+                const auto segment = static_cast<std::size_t>(juce::jlimit(0, 7, static_cast<int>(phase * 8.0f)));
+                return held[segment];
+            }
+        }
+    }
+
+    void paintDisplay(juce::Graphics& g)
+    {
+        const auto frame = displayArea.toFloat();
+        g.setColour(fieldBg);
+        g.fillRoundedRectangle(frame, 4.0f);
+
+        const auto plot = frame.reduced(1.0f);
+        const auto midY = plot.getCentreY();
+
+        // Centre (zero) line.
+        g.setColour(strokeSoft.withAlpha(0.9f));
+        g.drawHorizontalLine(juce::roundToInt(midY), plot.getX() + 2.0f, plot.getRight() - 2.0f);
+
+        const auto yFor = [&plot](float value) {
+            return plot.getY() + (1.0f - juce::jlimit(-1.0f, 1.0f, value)) * 0.5f * plot.getHeight();
+        };
+
+        if (isStepMode())
+        {
+            const auto count = activeStepCount();
+            const auto stepWidth = plot.getWidth() / static_cast<float>(count);
+            for (int step = 0; step < count; ++step)
+            {
+                const auto* raw = stepValues[static_cast<std::size_t>(step)];
+                const auto value = raw != nullptr ? juce::jlimit(-1.0f, 1.0f, raw->load()) : 0.0f;
+                const auto x = plot.getX() + static_cast<float>(step) * stepWidth;
+                const auto top = juce::jmin(midY, yFor(value));
+                const auto bottom = juce::jmax(midY, yFor(value));
+                auto bar = juce::Rectangle<float>(x + 1.0f, top, stepWidth - 2.0f,
+                                                  juce::jmax(2.0f, bottom - top));
+                g.setColour(zoneShape.withAlpha(0.30f));
+                g.fillRect(bar);
+                g.setColour(zoneShape);
+                g.fillRect(juce::Rectangle<float>(bar.getX(), yFor(value) - 1.0f, bar.getWidth(), 2.0f));
+
+                if (step > 0)
+                {
+                    g.setColour(strokeSoft.withAlpha(0.5f));
+                    g.drawVerticalLine(juce::roundToInt(x), plot.getY() + 2.0f, plot.getBottom() - 2.0f);
+                }
+            }
+        }
+        else
+        {
+            const auto shape = shapeValue != nullptr ? static_cast<int>(std::round(shapeValue->load())) : 3;
+            const auto phaseOffset = phaseValue != nullptr ? phaseValue->load() / 360.0f : 0.0f;
+            juce::Path wave;
+            constexpr int pointCount = 96;
+            for (int i = 0; i <= pointCount; ++i)
+            {
+                const auto fraction = static_cast<float>(i) / static_cast<float>(pointCount);
+                const auto x = plot.getX() + fraction * plot.getWidth();
+                const auto y = yFor(shapeSample(shape, fraction + phaseOffset));
+                if (i == 0)
+                    wave.startNewSubPath(x, y);
+                else
+                    wave.lineTo(x, y);
+            }
+            g.setColour(zoneShape);
+            g.strokePath(wave, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded));
+        }
+
+        // Live playhead + value dot from the audio thread's visual feed.
+        if (lastVisual.lfoVoiceActive)
+        {
+            const auto x = plot.getX() + juce::jlimit(0.0f, 1.0f, lastVisual.lfoPhase) * plot.getWidth();
+            g.setColour(text.withAlpha(0.55f));
+            g.drawVerticalLine(juce::roundToInt(x), plot.getY() + 1.0f, plot.getBottom() - 1.0f);
+            const auto y = yFor(lastVisual.lfoValue);
+            g.setColour(text);
+            g.fillEllipse(x - 2.5f, y - 2.5f, 5.0f, 5.0f);
+        }
+
+        g.setColour(strokeSoft);
+        g.drawRoundedRectangle(frame, 4.0f, 1.0f);
+    }
+
+    void timerCallback() override
+    {
+        if (!isShowing())
+            return;
+        lastVisual = audioProcessor.getUiVisualSnapshot();
+        repaint(displayArea);
+    }
+
+    SynthAudioProcessor& audioProcessor;
+    std::vector<std::unique_ptr<ParameterControl>> controls;
+    std::atomic<float>* shapeValue = nullptr;
+    std::atomic<float>* phaseValue = nullptr;
+    std::atomic<float>* stepCountValue = nullptr;
+    std::array<std::atomic<float>*, synth::lfoStepSlotCount> stepValues {};
+    std::array<juce::RangedAudioParameter*, synth::lfoStepSlotCount> stepParameters {};
+    juce::RangedAudioParameter* gestureParameter = nullptr;
+    juce::Rectangle<int> displayArea;
+    SynthAudioProcessor::UiVisualSnapshot lastVisual;
+};
+
+// ============================================================================
+// ModSourcesPanel: the draggable modulation source strip.
+//
+// One chip per real TransMod source from the modulation catalog. Dragging a
+// chip onto any halo-capable knob writes a route into a free TransMod slot
+// (the drop handler lives on the editor). Chips show live route counts; the
+// strip itself stores no routing state.
+// ============================================================================
+class SynthAudioProcessorEditor::ModSourcesPanel final : public LayoutSection
+{
+public:
+    ModSourcesPanel()
+    {
+        for (const auto& source : synth::modulationSourceCatalog())
+            if (source.source != synth::ModSource::None)
+                chips.push_back({ &source, {}, 0 });
+    }
+
+    int preferredHeight(int width) const override
+    {
+        const auto rows = rowsForWidth(width);
+        return captionH + padY * 2 + rows * chipHeight + (rows - 1) * chipGap;
+    }
+
+    void setRouteView(const synth::ModulationRouteView& view)
+    {
+        auto changed = false;
+        for (auto& chip : chips)
+        {
+            int count = 0;
+            for (const auto& route : view.activeRoutes)
+            {
+                if (route.source == chip.info->source)
+                    ++count;
+                if (route.scaler == chip.info->source && route.scaler != route.source)
+                    ++count;
+            }
+            if (count != chip.routeCount)
+            {
+                chip.routeCount = count;
+                changed = true;
+            }
+        }
+        if (changed)
+            repaint();
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        paintPanelBody(g, getLocalBounds().toFloat().reduced(0.5f));
+        auto header = getLocalBounds().removeFromTop(captionH);
+        paintCaptionBar(g, header);
+        paintModuleHeaderTick(g, header, zoneMod);
+
+        auto titleArea = header.reduced(16, 0);
+        auto badgeArea = titleArea.removeFromRight(52).withSizeKeepingCentre(52, 16);
+        g.setColour(zoneMod.withAlpha(0.2f));
+        g.fillRoundedRectangle(badgeArea.toFloat(), 8.0f);
+        g.setColour(zoneMod);
+        g.setFont(uiFont(10.0f, true));
+        g.drawText("DRAG", badgeArea, juce::Justification::centred, false);
+
+        g.setColour(text);
+        g.setFont(uiFont(12.0f, true));
+        g.drawText("MOD SOURCES", titleArea.removeFromLeft(110), juce::Justification::centredLeft, true);
+        g.setColour(mutedText);
+        g.setFont(uiFont(10.5f));
+        g.drawText("drag a chip onto a pitch / pulse / cutoff / level / pan knob to route it",
+                   titleArea, juce::Justification::centredLeft, true);
+
+        layoutChips();
+        for (const auto& chip : chips)
+        {
+            const auto active = chip.routeCount > 0;
+            g.setColour(active ? zoneMod.withAlpha(0.16f) : fieldBg);
+            g.fillRoundedRectangle(chip.bounds.toFloat(), 5.0f);
+            g.setColour(active ? zoneMod.withAlpha(0.8f) : strokeSoft);
+            g.drawRoundedRectangle(chip.bounds.toFloat().reduced(0.5f), 5.0f, 1.0f);
+
+            auto labelArea = chip.bounds.reduced(7, 0);
+            // Grip dots signal draggability.
+            g.setColour(mutedText.withAlpha(0.7f));
+            const auto grip = labelArea.removeFromLeft(7);
+            for (int dot = 0; dot < 3; ++dot)
+                g.fillEllipse(static_cast<float>(grip.getX()),
+                              static_cast<float>(grip.getCentreY() - 5 + dot * 4), 2.0f, 2.0f);
+            labelArea.removeFromLeft(3);
+
+            if (active)
+            {
+                auto countArea = labelArea.removeFromRight(20);
+                g.setColour(zoneMod.withAlpha(0.25f));
+                g.fillRoundedRectangle(countArea.toFloat().withSizeKeepingCentre(17.0f, 13.0f), 6.5f);
+                g.setColour(zoneMod.brighter(0.2f));
+                g.setFont(uiFont(9.5f, true));
+                g.drawText(juce::String(chip.routeCount), countArea, juce::Justification::centred, false);
+            }
+
+            g.setColour(active ? text : mutedText);
+            g.setFont(uiFont(10.5f, active));
+            g.drawFittedText(juce::String(chip.info->label), labelArea,
+                             juce::Justification::centredLeft, 1, 0.7f);
+        }
+    }
+
+    void mouseDown(const juce::MouseEvent& event) override
+    {
+        pressedChip = -1;
+        for (std::size_t i = 0; i < chips.size(); ++i)
+        {
+            if (chips[i].bounds.contains(event.getPosition()))
+            {
+                pressedChip = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        if (pressedChip < 0 || event.getDistanceFromDragStart() < 5)
+            return;
+
+        auto* container = juce::DragAndDropContainer::findParentDragContainerFor(this);
+        if (container == nullptr || container->isDragAndDropActive())
+            return;
+
+        const auto& chip = chips[static_cast<std::size_t>(pressedChip)];
+        container->startDragging(juce::String(modSourceDragPrefix) + juce::String(chip.info->id),
+                                 this, juce::ScaledImage(chipDragImage(chip)), false);
+    }
+
+    void mouseUp(const juce::MouseEvent&) override { pressedChip = -1; }
+
+private:
+    struct Chip
+    {
+        const synth::ModulationSourceInfo* info = nullptr;
+        juce::Rectangle<int> bounds;
+        int routeCount = 0;
+    };
+
+    static constexpr int captionH = 26;
+    static constexpr int padX = 11;
+    static constexpr int padY = 7;
+    static constexpr int chipHeight = 22;
+    static constexpr int chipGap = 6;
+    static constexpr int minChipWidth = 104;
+
+    int columnsForWidth(int width) const
+    {
+        const auto usable = std::max(1, width - padX * 2);
+        return std::max(2, usable / (minChipWidth + chipGap));
+    }
+
+    int rowsForWidth(int width) const
+    {
+        const auto columns = columnsForWidth(width);
+        return std::max(1, (static_cast<int>(chips.size()) + columns - 1) / columns);
+    }
+
+    void layoutChips()
+    {
+        auto area = getLocalBounds();
+        area.removeFromTop(captionH);
+        area = area.reduced(padX, padY);
+        const auto columns = columnsForWidth(getWidth());
+        const auto chipWidth = (area.getWidth() - (columns - 1) * chipGap) / columns;
+        for (std::size_t i = 0; i < chips.size(); ++i)
+        {
+            const auto column = static_cast<int>(i) % columns;
+            const auto row = static_cast<int>(i) / columns;
+            chips[i].bounds = { area.getX() + column * (chipWidth + chipGap),
+                                area.getY() + row * (chipHeight + chipGap),
+                                chipWidth, chipHeight };
+        }
+    }
+
+    juce::Image chipDragImage(const Chip& chip) const
+    {
+        const auto width = juce::jmax(60, chip.bounds.getWidth());
+        juce::Image image(juce::Image::ARGB, width, chipHeight, true);
+        juce::Graphics g(image);
+        g.setColour(zoneMod.withAlpha(0.9f));
+        g.fillRoundedRectangle(juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width),
+                                                      static_cast<float>(chipHeight)), 5.0f);
+        g.setColour(onAccentText);
+        g.setFont(uiFont(10.5f, true));
+        g.drawText(juce::String(chip.info->label), 0, 0, width, chipHeight,
+                   juce::Justification::centred, true);
+        return image;
+    }
+
+    std::vector<Chip> chips;
+    int pressedChip = -1;
 };
 
 // ============================================================================
@@ -1756,7 +2576,7 @@ private:
             const auto active = button.getToggleState();
             styleFlatButton(button,
                             active ? accent.darker(0.18f) : fieldBg,
-                            active ? juce::Colour::fromRGB(28, 21, 12) : mutedText);
+                            active ? onAccentText : mutedText);
         };
 
         refreshButton(factoryButton);
@@ -1918,7 +2738,7 @@ private:
             : item.file.getFileNameWithoutExtension();
 
         g.setColour(!item.valid ? warn.brighter(0.18f)
-                                : (active ? text : juce::Colour::fromRGB(216, 206, 186)));
+                                : (active ? text : text));
         g.setFont(uiFont(12.0f, active));
         g.drawFittedText(displayName, row, juce::Justification::centredLeft, 1, 0.68f);
 
@@ -2105,7 +2925,7 @@ private:
     void configureCommandButton(juce::TextButton& button, const juce::String& label, std::function<void()> handler)
     {
         button.setButtonText(label);
-        styleFlatButton(button, juce::Colour::fromRGB(82, 69, 50), text);
+        styleFlatButton(button, buttonBg, text);
         button.onClick = std::move(handler);
         addAndMakeVisible(button);
     }
@@ -2309,7 +3129,7 @@ private:
     {
         button.setButtonText(label);
         styleFlatButton(button, label == "Overwrite" ? warn.darker(0.2f) : accent.darker(0.18f),
-                        label == "Overwrite" ? text : juce::Colour::fromRGB(28, 21, 12));
+                        label == "Overwrite" ? text : onAccentText);
         button.onClick = std::move(handler);
         addAndMakeVisible(button);
     }
@@ -2346,9 +3166,9 @@ public:
         }
         addAndMakeVisible(parameterBox);
 
-        styleFlatButton(learnButton, accent.darker(0.18f), juce::Colour::fromRGB(28, 21, 12));
-        styleFlatButton(forgetButton, juce::Colour::fromRGB(82, 69, 50), text);
-        styleFlatButton(cancelButton, juce::Colour::fromRGB(82, 69, 50), mutedText);
+        styleFlatButton(learnButton, accent.darker(0.18f), onAccentText);
+        styleFlatButton(forgetButton, buttonBg, text);
+        styleFlatButton(cancelButton, buttonBg, mutedText);
         addAndMakeVisible(learnButton);
         addAndMakeVisible(forgetButton);
         addAndMakeVisible(cancelButton);
@@ -3283,6 +4103,7 @@ SynthAudioProcessorEditor::SynthAudioProcessorEditor(SynthAudioProcessor& p)
     buildHeader();
     buildLayerBar();
     buildPages();
+    wireModulationTargets();
 
     refreshPresetMenu();
     setSelectedLayer(0);
@@ -3290,6 +4111,7 @@ SynthAudioProcessorEditor::SynthAudioProcessorEditor(SynthAudioProcessor& p)
     updateDiagnostics();
     refreshPresetWorkflow();
     syncPresetMetadataPanel();
+    refreshModulationVisuals();
     startTimerHz(15);
 
     // Listen to every nested control so touching a knob can echo "name = value" in the LCD.
@@ -3298,6 +4120,38 @@ SynthAudioProcessorEditor::SynthAudioProcessorEditor(SynthAudioProcessor& p)
     setResizable(true, true);
     setResizeLimits(1080, 760, 1800, 1320);
     setSize(1320, 940);
+
+    // Headless UI proof: SYNTHIA_UI_SNAPSHOT=<path.png> renders the editor
+    // offscreen after it settles (no screen-recording permission needed) so
+    // UI states can be captured for QA/docs from scripts. No-op otherwise.
+    const auto snapshotPath = juce::SystemStats::getEnvironmentVariable("SYNTHIA_UI_SNAPSHOT", {});
+    if (snapshotPath.isNotEmpty())
+    {
+        // Optional preset to capture (e.g. step-LFO or modulation states).
+        const auto snapshotPreset =
+            juce::SystemStats::getEnvironmentVariable("SYNTHIA_UI_SNAPSHOT_PRESET", {});
+        if (snapshotPreset.isNotEmpty())
+        {
+            juce::String presetMessage;
+            audioProcessor.loadPresetFile(juce::File(snapshotPreset), presetMessage);
+        }
+
+        juce::Timer::callAfterDelay(900, [safeThis = juce::Component::SafePointer<SynthAudioProcessorEditor>(this),
+                                          snapshotPath] {
+            if (safeThis == nullptr)
+                return;
+            juce::Image image(juce::Image::ARGB, safeThis->getWidth(), safeThis->getHeight(), true);
+            juce::Graphics graphics(image);
+            safeThis->paintEntireComponent(graphics, true);
+            juce::File file(snapshotPath);
+            file.deleteFile();
+            juce::FileOutputStream stream(file);
+            if (stream.openedOk())
+                juce::PNGImageFormat().writeImageToStream(image, stream);
+            if (juce::SystemStats::getEnvironmentVariable("SYNTHIA_UI_SNAPSHOT_QUIT", {}) == "1")
+                juce::JUCEApplicationBase::quit();
+        });
+    }
 }
 
 SynthAudioProcessorEditor::~SynthAudioProcessorEditor()
@@ -3317,11 +4171,11 @@ void SynthAudioProcessorEditor::buildHeader()
     engineTag.setFont(uiFont(10.0f, true));
     addAndMakeVisible(engineTag);
 
-    styleFlatButton(prevPresetButton, juce::Colour::fromRGB(82, 69, 50));
-    styleFlatButton(nextPresetButton, juce::Colour::fromRGB(82, 69, 50));
+    styleFlatButton(prevPresetButton, buttonBg);
+    styleFlatButton(nextPresetButton, buttonBg);
     styleFlatButton(loadButton, accent.darker(0.32f));
-    styleFlatButton(saveButton, juce::Colour::fromRGB(112, 88, 50));
-    styleFlatButton(duplicateButton, juce::Colour::fromRGB(112, 88, 50));
+    styleFlatButton(saveButton, buttonRaised);
+    styleFlatButton(duplicateButton, buttonRaised);
     styleFlatButton(panicButton, warn.darker(0.1f));
     dirtyStatePill.setJustificationType(juce::Justification::centred);
     dirtyStatePill.setFont(uiFont(10.5f, true));
@@ -3384,7 +4238,7 @@ void SynthAudioProcessorEditor::buildLayerBar()
     addAndMakeVisible(layerCaption);
 
     auto styleLayerButton = [this](juce::TextButton& button) {
-        styleFlatButton(button, juce::Colour::fromRGB(82, 69, 50));
+        styleFlatButton(button, buttonBg);
         button.setClickingTogglesState(false);
         addAndMakeVisible(button);
     };
@@ -3440,7 +4294,7 @@ void SynthAudioProcessorEditor::buildPages()
 {
     // ---- SOUND: the live core sound-design surface ------------------------
     // Blue LCD preset screen + MIXER flank the filter, like the Sylenth centre row.
-    lcdDisplay = std::make_unique<LcdDisplay>();
+    lcdDisplay = std::make_unique<LcdDisplay>(audioProcessor);
     soundPage.addAndMakeVisible(*lcdDisplay);
     mixerPanel = std::make_unique<MixerPanel>(audioProcessor.getValueTreeState(), *meter);
     soundPage.addAndMakeVisible(*mixerPanel);
@@ -3481,10 +4335,14 @@ void SynthAudioProcessorEditor::buildPages()
                                                   "Mod Env", zoneShape, "mod_env.");
     soundPage.addAndMakeVisible(*modEnvPanel);
 
-    lfoPanel = addPanel(soundPage, soundPanels, "LFO", {
-        "lfo.shape", "lfo.rate_mode", "lfo.rate_hz", "lfo.sync_division",
-        "lfo.phase_degrees", "lfo.gate_mode", "lfo.mono", "lfo.swing"
-    }, {}, zoneShape);
+    // LFO as a visual module: bound controls plus a live display whose Step
+    // shape is a drawable grid over the real lfo.step.* parameters.
+    lfoModulePanel = std::make_unique<LfoModulePanel>(audioProcessor);
+    soundPage.addAndMakeVisible(*lfoModulePanel);
+
+    // Draggable modulation source chips; drops land on halo-capable knobs.
+    modSourcesPanel = std::make_unique<ModSourcesPanel>();
+    soundPage.addAndMakeVisible(*modSourcesPanel);
 
     voicePanel = addPanel(soundPage, soundPanels, "Voice", {
         "voice.mode", "voice.polyphony", "voice.unison_count", "voice.retrigger",
@@ -3571,10 +4429,10 @@ void SynthAudioProcessorEditor::setSelectedLayer(int layerIndex)
     const auto layerPrefix = "layer." + juce::String(layerNumber) + ".";
     const auto stripPrefix = "Layer " + layerLetter + " ";
 
-    // Green-lit active part capsule, like Sylenth's Part Select; dark text for contrast.
-    const auto activeColour = live.darker(0.05f);
-    const auto activeText = juce::Colour::fromRGB(22, 30, 14);
-    const auto inactiveColour = juce::Colour::fromRGB(82, 69, 50);
+    // Lit active part capsule; dark text for contrast on the accent fill.
+    const auto activeColour = accent.darker(0.08f);
+    const auto activeText = onAccentText;
+    const auto inactiveColour = buttonBg;
     styleFlatButton(layerAButton, selectedLayer == 0 ? activeColour : inactiveColour,
                     selectedLayer == 0 ? activeText : text);
     styleFlatButton(layerBButton, selectedLayer == 1 ? activeColour : inactiveColour,
@@ -3638,8 +4496,8 @@ void SynthAudioProcessorEditor::setPage(Page page)
         modulationOverviewPanel->refresh();
 
     auto styleTab = [](juce::TextButton& tab, bool active) {
-        styleFlatButton(tab, active ? accent.darker(0.18f) : juce::Colour::fromRGB(72, 61, 44),
-                        active ? juce::Colour::fromRGB(28, 21, 12) : mutedText);
+        styleFlatButton(tab, active ? accent.darker(0.18f) : buttonBg,
+                        active ? onAccentText : mutedText);
     };
     styleTab(soundTab, page == Page::Sound);
     styleTab(modTab, page == Page::Mod);
@@ -3651,46 +4509,24 @@ void SynthAudioProcessorEditor::setPage(Page page)
 
 void SynthAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    // Warm brushed-metal console body with a soft vertical gradient.
-    g.setGradientFill(juce::ColourGradient(background.brighter(0.10f), 0.0f, 0.0f,
-                                           background.darker(0.14f), 0.0f, static_cast<float>(getHeight()), false));
-    g.fillRect(getLocalBounds());
+    // Flat midnight body; modules supply their own cards on top.
+    g.fillAll(background);
 
-    // Darker side rails frame the console like the Sylenth wooden cheeks.
-    constexpr int rail = 9;
-    g.setColour(headerBg.darker(0.25f));
-    g.fillRect(0, 0, rail, getHeight());
-    g.fillRect(getWidth() - rail, 0, rail, getHeight());
-    g.setColour(stroke.withAlpha(0.35f));
-    g.drawVerticalLine(rail, 0.0f, static_cast<float>(getHeight()));
-    g.drawVerticalLine(getWidth() - rail - 1, 0.0f, static_cast<float>(getHeight()));
-
-    // Integrated performance strip: the preset header and the part/layer row share one
-    // brushed-metal gradient so the top reads as part of the instrument surface rather than
-    // two stacked toolbars (Sylenth's top strip is a single flush band).
+    // Performance strip: the preset header and part/layer row share one darker
+    // flush band, separated from the workspace by a single hairline.
     const auto stripBottom = headerHeight + layerBarHeight;
-    auto strip = getLocalBounds().removeFromTop(stripBottom);
-    g.setGradientFill(juce::ColourGradient(juce::Colour::fromRGB(45, 40, 32), 0.0f, 0.0f,
-                                           juce::Colour::fromRGB(25, 22, 17), 0.0f,
-                                           static_cast<float>(stripBottom), false));
-    g.fillRect(strip);
-    // A soft inset seam marks the preset/part split without a hard toolbar edge.
-    g.setColour(juce::Colours::black.withAlpha(0.16f));
-    g.drawHorizontalLine(headerHeight, static_cast<float>(rail), static_cast<float>(getWidth() - rail));
-    g.setColour(stroke.withAlpha(0.12f));
-    g.drawHorizontalLine(headerHeight + 1, static_cast<float>(rail), static_cast<float>(getWidth() - rail));
-    // Brass base divider grounds the strip against the console body.
-    g.setColour(stroke.withAlpha(0.5f));
+    g.setColour(headerBg);
+    g.fillRect(getLocalBounds().removeFromTop(stripBottom));
+    g.setColour(strokeSoft);
+    g.drawHorizontalLine(headerHeight, 0.0f, static_cast<float>(getWidth()));
+    g.setColour(stroke.withAlpha(0.8f));
     g.drawHorizontalLine(stripBottom, 0.0f, static_cast<float>(getWidth()));
-    g.setColour(juce::Colours::black.withAlpha(0.22f));
-    g.drawHorizontalLine(stripBottom + 1, 0.0f, static_cast<float>(getWidth()));
 
-    // Selected-part accent: a green underline on the active Part button, the way Sylenth's
-    // Part Select lights the live part.
+    // Selected-part accent: a lit underline on the active Part button.
     const auto& activeLayerButton = selectedLayer == 0 ? layerAButton : layerBButton;
     if (!activeLayerButton.getBounds().isEmpty())
     {
-        g.setColour(live);
+        g.setColour(accent);
         g.fillRect(juce::Rectangle<int>(activeLayerButton.getX(), activeLayerButton.getBottom() + 3,
                                         activeLayerButton.getWidth(), 2));
     }
@@ -3864,19 +4700,21 @@ void SynthAudioProcessorEditor::layoutActivePage()
     {
         if (slotPanels[0] == nullptr || slotPanels[1] == nullptr || coreOscPanel == nullptr
             || ampEnvPanel == nullptr || modEnvPanel == nullptr || lcdDisplay == nullptr
-            || mixerPanel == nullptr || sequencerPanel == nullptr || filterPanel == nullptr)
+            || mixerPanel == nullptr || sequencerPanel == nullptr || filterPanel == nullptr
+            || lfoModulePanel == nullptr || modSourcesPanel == nullptr)
             return;
-        // The Sound page is the synthesis engine, mirroring the Sylenth main panel:
-        // oscillators around the amp envelope on top, the signature Filter | centre LCD |
-        // Mixer row, then the mod-env/LFO/performance shaping row, the legacy A1 tone
-        // source, performance modules, and the arp/step/chord grid. Preset/MIDI workflow
-        // now lives on the Browser page, so this page stays close to one screen.
+        // The Sound page is the synthesis engine: oscillators around the amp envelope
+        // on top, the Filter | centre display | Mixer row, then the mod-env/LFO
+        // shaping row with the LFO display as the hero, the legacy A1 tone source,
+        // performance modules, and the arp/step/chord grid. Preset/MIDI workflow
+        // lives on the Browser page, so this page stays close to one screen.
         std::vector<std::vector<RowItem>> rows = {
             { { slotPanels[0].get(), 0.40f }, { ampEnvPanel.get(), 0.20f }, { slotPanels[1].get(), 0.40f } },
             { { filterPanel.get(), 0.30f }, { lcdDisplay.get(), 0.40f }, { mixerPanel.get(), 0.30f } },
-            { { modEnvPanel.get(), 0.24f }, { lfoPanel, 0.30f }, { voicePanel, 0.22f }, { ampPanel, 0.24f } },
+            { { modEnvPanel.get(), 0.22f }, { lfoModulePanel.get(), 0.50f }, { voicePanel, 0.28f } },
+            { { modSourcesPanel.get(), 1.0f } },
             { { coreOscPanel, 1.0f } },
-            { { rampPanel, 0.5f }, { macroPanel, 0.5f } },
+            { { rampPanel, 0.34f }, { ampPanel, 0.33f }, { macroPanel, 0.33f } },
             { { sequencerPanel.get(), 1.0f } },
         };
         layoutRows(soundPage, rows, viewWidth);
@@ -4280,6 +5118,10 @@ void SynthAudioProcessorEditor::refreshPresetWorkflow()
 
     if (lcdDisplay != nullptr)
         lcdDisplay->setDirty(snapshot.dirty);
+
+    // Keep the LCD preset readout honest when the preset changes underneath
+    // the editor (host state restore, processor-side loads).
+    updateLcdPreset();
 }
 
 const SynthAudioProcessor::PresetListItem* SynthAudioProcessorEditor::findCurrentPresetItem()
@@ -4411,6 +5253,174 @@ void SynthAudioProcessorEditor::updateDiagnostics()
     }
 }
 
+void SynthAudioProcessorEditor::wireModulationTargets()
+{
+    modTargetSliders.clear();
+    for (auto& panel : soundPanels)
+        panel->collectModTargets(modTargetSliders);
+    if (filterPanel != nullptr)
+        filterPanel->collectModTargets(modTargetSliders);
+
+    for (auto* target : modTargetSliders)
+    {
+        target->onModSourceDropped = [this, target](const juce::String& sourceId) {
+            handleModSourceDrop(*target, sourceId);
+        };
+        target->onDepthEdited = [this, target](int slotNumber, float depth) {
+            if (const auto* destination = target->destinationInfo())
+                handleModDepthEdit(slotNumber, juce::String(destination->id), depth);
+        };
+        target->onSlotCleared = [this](int slotNumber) { handleModSlotClear(slotNumber); };
+    }
+}
+
+void SynthAudioProcessorEditor::handleModSourceDrop(ModTargetSlider& target, const juce::String& sourceId)
+{
+    const auto* destination = target.destinationInfo();
+    const auto* source = synth::findModulationSourceInfo(sourceId.toStdString());
+    if (destination == nullptr || source == nullptr)
+        return;
+
+    const auto view = audioProcessor.getModulationRouteView();
+    for (const auto& route : view.activeRoutes)
+    {
+        if (route.destinationId == destination->id && route.sourceId == source->id)
+        {
+            updateStatus(juce::String(source->label) + " already routed in slot "
+                         + juce::String(route.slotNumber) + " - alt-drag the knob to set depth");
+            return;
+        }
+    }
+
+    int freeSlot = 0;
+    for (const auto& slot : view.slots)
+    {
+        if (!slot.enabled)
+        {
+            freeSlot = slot.slotNumber;
+            break;
+        }
+    }
+    if (freeSlot == 0)
+    {
+        updateStatus("All 8 TransMod slots are in use - clear one to add this route");
+        return;
+    }
+
+    synth::ModulationRouteWriteRequest request;
+    request.slotNumber = freeSlot;
+    request.sourceId = source->id;
+    request.scalerId = "none";
+    request.destinationId = destination->id;
+    request.depth = 0.25f * destination->maximumDepth;
+
+    juce::String message;
+    if (!audioProcessor.writeModulationRoute(request, message))
+    {
+        updateStatus("Modulation route failed: " + message);
+        return;
+    }
+
+    updateStatus(juce::String(source->label) + " -> " + juce::String(destination->label)
+                 + " routed in slot " + juce::String(freeSlot)
+                 + " - alt-drag to set depth, right-click to clear");
+    if (lcdDisplay != nullptr)
+        lcdDisplay->setTouchReadout(juce::String(source->label) + " -> "
+                                    + juce::String(destination->label));
+    refreshModulationVisuals();
+    if (modulationOverviewPanel != nullptr)
+        modulationOverviewPanel->refresh();
+}
+
+void SynthAudioProcessorEditor::handleModDepthEdit(int slotNumber, const juce::String& destinationId,
+                                                   float depth)
+{
+    const auto view = audioProcessor.getModulationRouteView();
+    const synth::ModulationSlotSummary* slot = nullptr;
+    for (const auto& candidate : view.slots)
+    {
+        if (candidate.slotNumber == slotNumber)
+        {
+            slot = &candidate;
+            break;
+        }
+    }
+    if (slot == nullptr || slot->sourceId.empty() || slot->sourceId == "none")
+        return;
+
+    synth::ModulationRouteWriteRequest request;
+    request.slotNumber = slotNumber;
+    request.sourceId = slot->sourceId;
+    request.scalerId = slot->scalerId.empty() ? "none" : slot->scalerId;
+    request.destinationId = destinationId.toStdString();
+    request.depth = depth;
+
+    juce::String message;
+    if (!audioProcessor.writeModulationRoute(request, message))
+        return;
+
+    const auto* destination = synth::findModulationDestinationInfo(request.destinationId);
+    const auto unit = destination != nullptr && destination->unit == "semitones" ? " st"
+        : destination != nullptr && destination->unit == "dB"                    ? " dB"
+                                                                                 : "";
+    if (lcdDisplay != nullptr)
+        lcdDisplay->setTouchReadout("Slot " + juce::String(slotNumber) + " depth  =  "
+                                    + juce::String(depth, 2) + unit);
+    refreshModulationVisuals();
+}
+
+void SynthAudioProcessorEditor::handleModSlotClear(int slotNumber)
+{
+    juce::String message;
+    if (!audioProcessor.clearModulationSlot(slotNumber, message))
+    {
+        updateStatus("Clear failed: " + message);
+        return;
+    }
+
+    updateStatus("TransMod slot " + juce::String(slotNumber) + " cleared");
+    refreshModulationVisuals();
+    if (modulationOverviewPanel != nullptr)
+        modulationOverviewPanel->refresh();
+}
+
+void SynthAudioProcessorEditor::refreshModulationVisuals()
+{
+    const auto view = audioProcessor.getModulationRouteView();
+    const auto visual = audioProcessor.getUiVisualSnapshot();
+
+    if (modSourcesPanel != nullptr)
+        modSourcesPanel->setRouteView(view);
+
+    for (auto* target : modTargetSliders)
+    {
+        const auto* destination = target->destinationInfo();
+        if (destination == nullptr)
+            continue;
+
+        std::vector<ModTargetSlider::RouteDisplay> displays;
+        for (const auto& route : view.activeRoutes)
+        {
+            if (route.destinationId != destination->id)
+                continue;
+
+            ModTargetSlider::RouteDisplay display;
+            display.slotNumber = route.slotNumber;
+            display.depth = route.depth;
+            display.lfoSource = route.source == synth::ModSource::Lfo;
+            const auto* source = synth::findModulationSourceInfo(route.source);
+            display.bipolarSource = source != nullptr
+                && source->polarity == synth::ModulationPolarity::Bipolar;
+            display.label = juce::String(source != nullptr ? source->label : "Source")
+                + " -> " + juce::String(destination->label);
+            displays.push_back(std::move(display));
+        }
+
+        target->setRouteDisplays(std::move(displays));
+        target->setLiveLfo(visual.lfoVoiceActive, visual.lfoValue);
+    }
+}
+
 void SynthAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 {
     showSliderReadout(event);
@@ -4480,5 +5490,6 @@ void SynthAudioProcessorEditor::timerCallback()
                 panel->syncEnabledState();
         if (filterPanel != nullptr)
             filterPanel->syncEnabledState();
+        refreshModulationVisuals();
     }
 }
