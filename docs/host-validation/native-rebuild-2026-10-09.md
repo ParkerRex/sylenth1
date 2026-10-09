@@ -35,6 +35,8 @@ After gracefully quitting Live, `scripts/install-local-plugins.sh build-native-r
 
 These records include both architecture UUIDs. `install-accessibility.log` records the replacement and verification. The initial developer package does not contain these later binaries.
 
+The final developer archive is `build/release-artifacts/synthia-native-0.1.0-developer-20261009T193930274525Z`. Its manifest identifies clean source `5f9778a11a665cca26aea46cb618b91d46d63917`, which includes accessibility commit `12a24a3` and documentation. The canonical release pipeline passed 11/11 CTest entries and 17/17 core reports. All six checksum entries passed; packaged AU/VST3 executable hashes match the current mapped binaries above. It remains ad-hoc signed, unnotarized, and explicitly unqualified for public distribution.
+
 ## Recorded checks
 
 The developer package contains `ctest.xml` with **11/11 Release CTest entries passing**, zero failures/skips, and `core-summary.json` with **17/17 standalone core reports passing**. Its manifest records passing realtime/type-safety validation, verified universal bundle contents, executable hashes, and package checksums.

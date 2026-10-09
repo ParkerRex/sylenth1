@@ -63,6 +63,8 @@ In progress. Accessibility source `12a24a3` passes the Debug quality gate, 11/11
 
 Initial developer artifacts are under `build/release-artifacts/synthia-native-0.1.0-developer-20261009T183920927525Z`. The manifest records clean source `1f246f929a5addfd141aef8c61480608d02119f8`, verified ad-hoc signatures, 18 factory presets per universal bundle, 11 passing Release CTest entries, and 17 passing core reports. Initial installed AU/VST3 hashes match that manifest. The later accessibility build has separate mapped-binary evidence. See [the host qualification record](../../host-validation/native-rebuild-2026-10-09.md).
 
+Final developer artifacts are under `build/release-artifacts/synthia-native-0.1.0-developer-20261009T193930274525Z`, from clean source `5f9778a` with accessibility changes included. The release pipeline again passed 11/11 CTest and 17/17 core reports. All six checksum entries pass, and AU/VST3 executable hashes match the updated mapped host binaries. Public distribution remains unqualified.
+
 The final optimized headless benchmark reports a median 562.638 ms for five rendered seconds (8.88671 times realtime) using the supersaw preset, six held notes, 48 kHz, 128-sample blocks, per-block parameter publication, 1.5 seconds warmup, and three repetitions. It records zero invalid samples. It is not a paired before/after result or the unavailable nine-track Live benchmark.
 
 ## Context and Orientation
