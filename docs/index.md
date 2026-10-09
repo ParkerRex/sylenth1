@@ -8,6 +8,8 @@ This directory holds implementation-facing documentation for synthia. `../SPEC.m
 - `../SPEC.md`: full product specification.
 - `../CONTEXT.md`: vocabulary and decision lanes.
 - `../AGENTS.md`: workspace rules for coding agents.
+- [CONTRIBUTING.md](../CONTRIBUTING.md): setup, focused verification, and how to submit a PR.
+- [SCREENSHOTS.md](SCREENSHOTS.md): current interface captures and a simple capture procedure.
 
 ## Engineering Docs
 

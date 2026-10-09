@@ -1,5 +1,17 @@
 # Synthia
 
+I used to make a lot of music with [Sylenth1](https://www.lennardigital.com/sylenth1/), and I wanted to see how close AI models could get to recreating it as a benchmark.
+
+I first tried this with Anthropic Fable 5.1 in June or July when it came out, and it kind of flopped. Later, I had a bunch of extra ChatGPT Astra tokens, threw Astra at it, and got really close.
+
+I don't want to take away from what LennarDigital has built. Sylenth1 is awesome. This is just a recreation of that amazing plugin. I highly recommend paying for the original if you want to use it, because this isn't going to sound as good. But it's pretty cool what you can do.
+
+![Synthia Part A with the Pluck Core 01 preset](docs/assets/screenshots/part-a-pluck.png)
+
+Want to open a PR? Read [CONTRIBUTING.md](CONTRIBUTING.md) and [open a pull request](https://github.com/ParkerRex/synthia/pulls). See the [screenshots and capture guide](docs/SCREENSHOTS.md) for the current interface.
+
+## Everything below this is AI slop
+
 Synthia is a native macOS software instrument built with C++20, JUCE, and CMake. The active release recreates the classic Sylenth1 control layout and documented instrument behavior as AU, VST3, and a standalone application.
 
 The October 2026 rebuild replaces the modern dark interface and shared sound path with a classic one-screen editor and independent stereo parts. Old Synthia patch compatibility is explicitly out of scope. Browser/Wasm, AI generation, and conversational editing are deferred.
