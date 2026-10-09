@@ -14,7 +14,7 @@ read_when:
 
 ## Purpose / Big Picture
 
-Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control and visual reference, with working original behaviors and explicit release proof. The user authorized full parallel implementation on 2026-10-09 and deferred the browser initiative. Keep changes local; pushing or public publication was not requested.
+Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control and visual reference, with working original behaviors and explicit release proof. The user authorized full parallel implementation on 2026-10-09 and deferred the browser initiative. The owner subsequently authorized pushing and landing all source changes; the rebuild is now on `master`. Public binary distribution remains a separate qualification and publication decision.
 
 ## Progress
 
@@ -101,7 +101,7 @@ Engine and contract owners agree on structs and IDs before editor and validation
 
 ## Concrete Steps
 
-Work from `/Users/parkerrex/Developer/synthia`, on `codex/classic-sylenth-rebuild`.
+Work from `/Users/parkerrex/Developer/synthia`, on `master`. The owner-authorized landing fast-forwarded the existing tested rebuild without changing its code.
 
 The extra integration worktree was archived after its commits were pushed. Disposable build directories and dependency caches were removed at the owner's request to recover disk space. CMake can fetch pinned JUCE 8.0.13 on the next authorized build; do not assume a retained `build/_deps/juce-src` checkout. Run one coordinated build at a time with bounded parallelism.
 
