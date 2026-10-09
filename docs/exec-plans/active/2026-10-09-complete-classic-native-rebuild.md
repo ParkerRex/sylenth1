@@ -1,6 +1,6 @@
 ---
 title: Complete Classic Native Rebuild
-status: active
+status: blocked
 created_at: 2026-10-09
 completed_at: null
 summary: Complete native classic instrument behavior, editor, reference validation, and release qualification.
@@ -60,7 +60,15 @@ Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control
 
 ## Outcomes & Retrospective
 
-In progress. Accessibility source `12a24a3` passes the Debug quality gate, 11/11 Release CTest, AUval, both saved-set reopen/play checks with current mapped AU/VST3 identity, and native Standalone control actions. It preserves the inspected Pluck pixels. Comprehensive host state restore, automation/lifecycle/render comparison, and measured Live CPU coverage remain open. Live's inaccessible editor-open control limits further automated host interaction. External original-plugin references, licensing decisions, notarization credentials, and untested host/hardware targets remain unresolved. These results do not qualify a public release.
+Blocked on external reference evidence and remaining host access. Accessibility source `12a24a3` passes the Debug quality gate, 11/11 Release CTest, AUval, both saved-set reopen/play checks with current mapped AU/VST3 identity, and native Standalone control actions. It preserves the inspected Pluck pixels. Both formats also exported audible, unclipped WAVs in Live, and a limited one-instance CPU measurement is recorded. Comprehensive host state restore, automation, editor lifecycle, sample-rate/buffer changes, offline/realtime comparison, and representative multi-instance performance remain open. These results do not qualify a public release.
+
+The current reference audit returned failure for all five audio cases and all six image cases because original recordings/captures are missing. Standard system/user plugin directories contain no Sylenth1 bundle. Live remains on the dedicated VST3 qualification set with the editor closed; its editor-open button is unavailable to the current automation tool. No further source change can substitute for this missing evidence.
+
+Inputs needed to resume the remaining qualification:
+
+- A licensed selected-version Sylenth1 installation or authorized original PCM/lossless image captures with matching state and capture metadata. This also resolves the outstanding version-specific LFO coverage question.
+- Open Synthia's editor from the wrench button in Live to enable the remaining native control and host-state checks; additional automation/recording controls may still require manual assistance.
+- For final distribution qualification: the owned-code/JUCE licensing decision, authorized notarization credentials, and actual Intel/minimum-macOS/clean-machine evidence described in the release checklist. Public publication remains separately authorized.
 
 Initial developer artifacts are under `build/release-artifacts/synthia-native-0.1.0-developer-20261009T183920927525Z`. The manifest records clean source `1f246f929a5addfd141aef8c61480608d02119f8`, verified ad-hoc signatures, 18 factory presets per universal bundle, 11 passing Release CTest entries, and 17 passing core reports. Initial installed AU/VST3 hashes match that manifest. The later accessibility build has separate mapped-binary evidence. See [the host qualification record](../../host-validation/native-rebuild-2026-10-09.md).
 
