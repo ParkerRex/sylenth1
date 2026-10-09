@@ -26,10 +26,16 @@ Installed paths:
 - AU: `~/Library/Audio/Plug-Ins/Components/Synthia.component`
 - VST3: `~/Library/Audio/Plug-Ins/VST3/Synthia.vst3`
 
-The install script checks the source bundles before copying and ad-hoc signs the copied bundles for local host scanning. A distribution candidate must retain its Developer ID signature and must not pass through this development installer. To preserve the already verified source signature during debugging:
+The install script checks source architecture, deployment minimum, metadata, and factory content before copying; raw build bundles may be unsigned because packaging signs separate staged copies. It ad-hoc signs the copied AU/VST3 bundles and requires valid sealed signatures for both native slices after installation. A distribution candidate must retain its Developer ID signature and must not pass through this development installer. To preserve the already verified source signature during debugging:
 
 ```bash
-SYNTHIA_SKIP_ADHOC_SIGN=1 scripts/install-local-plugins.sh build-release RelWithDebInfo RelWithDebInfo
+SYNTHIA_SKIP_ADHOC_SIGN=1 scripts/install-local-plugins.sh build-release RelWithDebInfo
+```
+
+`SYNTHIA_SKIP_ADHOC_SIGN=1` requires valid source AU/VST3 signatures before copying and verifies the installed signatures afterward. It fails for unsigned or damaged sources and never skips verification. Preview the exact preflight without changing installed files:
+
+```bash
+scripts/install-local-plugins.sh build-release RelWithDebInfo --dry-run
 ```
 
 Run AU validation after install:

@@ -51,6 +51,28 @@ def main() -> None:
             run("codesign", "--force", "--sign", "-", "--timestamp=none", bundle)
         check_bundles(artifacts)
         print("PASS: universal ad-hoc signed native fixtures, metadata and all factory bytes")
+        installer = ROOT / "scripts/install-local-plugins.sh"
+        for fmt, name in BUNDLES.items():
+            run("codesign", "--remove-signature", artifacts / fmt / name)
+        preview = run(installer, directory, "Release", "--dry-run")
+        if "install preflight passed" not in preview or "ad-hoc sign installed copies" not in preview:
+            raise RuntimeError("unsigned developer install preflight did not reach the dry-run boundary")
+        print("PASS: unsigned raw build bundles pass developer install preflight without installation")
+        expect_failure("skip-signing with unsigned source plugins", lambda: run(
+            "env", "SYNTHIA_SKIP_ADHOC_SIGN=1", installer, directory, "Release", "--dry-run"))
+        for fmt in ("AU", "VST3"):
+            run("codesign", "--force", "--sign", "-", artifacts / fmt / BUNDLES[fmt])
+        preview = run("env", "SYNTHIA_SKIP_ADHOC_SIGN=1", installer, directory, "Release", "--dry-run")
+        if "preserve verified source signatures" not in preview:
+            raise RuntimeError("signed source plugin preservation preflight failed")
+        print("PASS: skip-signing verifies AU/VST3 while allowing an unsigned unused standalone")
+        damaged = artifacts / "AU/Synthia.component/Contents/Resources/install-preflight-test.txt"
+        damaged.write_text("invalid signature fixture")
+        expect_failure("skip-signing with damaged source signature", lambda: run(
+            "env", "SYNTHIA_SKIP_ADHOC_SIGN=1", installer, directory, "Release", "--dry-run"))
+        damaged.unlink()
+        for fmt, name in BUNDLES.items():
+            run("codesign", "--force", "--sign", "-", artifacts / fmt / name)
         standalone = artifacts / "Standalone/Synthia.app"
         plist = standalone / "Contents/Info.plist"
         original = plist.read_bytes()

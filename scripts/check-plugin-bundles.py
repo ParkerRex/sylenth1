@@ -22,7 +22,8 @@ def main() -> None:
     if args.output:
         write_json(args.output, {"schema_version": 1, "passed": True, "bundles": report})
     for bundle in report:
-        print(f"{bundle['format']}: universal, metadata/presets valid, signature {bundle['signature_kind']}")
+        signature = bundle['signature_kind'] if bundle['signature_verified'] else "unchecked"
+        print(f"{bundle['format']}: universal, metadata/presets valid, signature {signature}")
     print(f"bundle checks passed: {artifacts}")
 
 
