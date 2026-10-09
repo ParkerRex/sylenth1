@@ -124,3 +124,7 @@ Live's main device panel does not expose its editor-open wrench through the avai
 ## Scope limits
 
 Universal slice validation does not establish native Intel execution. Live 12, minimum macOS 11.0, Intel hardware, and a clean user machine remain separate qualification environments. Missing original-plugin audio and lossless image captures remain separate from host stability checks. Distribution still needs licensing/content decisions, Developer ID signing, notarization, clean-machine proof, and owner publication authorization. This developer candidate is not a qualified public release.
+
+## Evidence location after cleanup
+
+On 2026-10-09, generated build caches and duplicate binaries were removed at the owner's request. The integration worktree was archived after pushing its source commits. All qualification records, saved Live sets, rollback copies, and the final developer package were copied to `/Users/parkerrex/Developer/synthia/build` and checked against their original bytes. Relative evidence paths in this document now resolve from that checkout. Installed plugin bundles were retained. The cleanup did not rebuild or alter the tested binaries, and their recorded qualification limits still apply.

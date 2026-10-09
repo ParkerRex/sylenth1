@@ -101,9 +101,11 @@ Engine and contract owners agree on structs and IDs before editor and validation
 
 ## Concrete Steps
 
-Work from `/Users/parkerrex/.codex/worktrees/sylenth-native-rebuild/synthia`.
+Work from `/Users/parkerrex/Developer/synthia`, on `codex/classic-sylenth-rebuild`.
 
-Use the original checkout's pinned JUCE source at `/Users/parkerrex/Developer/synthia/build/_deps/juce-src` to avoid redundant downloads. Configure fresh worktree-local output directories; never reuse the original checkout's CMake cache. Run one coordinated build at a time with bounded parallelism.
+The extra integration worktree was archived after its commits were pushed. Disposable build directories and dependency caches were removed at the owner's request to recover disk space. CMake can fetch pinned JUCE 8.0.13 on the next authorized build; do not assume a retained `build/_deps/juce-src` checkout. Run one coordinated build at a time with bounded parallelism.
+
+Validation reports, qualification sets, rollback copies, and the latest developer package were copied and verified under this checkout's `build/reports` and `build/release-artifacts`. Older build reports are under `build/reports/historical-builds`; prior primary-checkout reports are under `build/reports/original-checkout-reports`. Temporary session files were verified and compressed into `build/reports/session-temporary-files-2026-10-09.tar.gz` before their originals were removed. These generated records remain local; source, documentation, presets, tests, and screenshots are pushed to GitHub.
 
 ## Validation and Acceptance
 
