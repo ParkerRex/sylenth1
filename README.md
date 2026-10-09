@@ -8,7 +8,7 @@ I don't want to take away from what LennarDigital has built. Sylenth1 is awesome
 
 ![Synthia Part A with the Pluck Core 01 preset](docs/assets/screenshots/part-a-pluck.png)
 
-Want to open a PR? Read [CONTRIBUTING.md](CONTRIBUTING.md) and [open a pull request](https://github.com/ParkerRex/synthia/pulls). See the [screenshots and capture guide](docs/SCREENSHOTS.md) for the current interface.
+Want to open a PR? Read [CONTRIBUTING.md](CONTRIBUTING.md) and [open a pull request](https://github.com/ParkerRex/sylenth1/pulls). See the [screenshots and capture guide](docs/SCREENSHOTS.md) for the current interface.
 
 ## Everything below this is AI slop
 

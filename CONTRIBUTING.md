@@ -6,12 +6,12 @@ Use original or explicitly licensed code, assets, and presets. Credit the refere
 
 ## Get the source
 
-Fork [ParkerRex/synthia](https://github.com/ParkerRex/synthia) on GitHub, then replace `YOUR_USERNAME` below with your account:
+Fork [ParkerRex/sylenth1](https://github.com/ParkerRex/sylenth1) on GitHub, then replace `YOUR_USERNAME` below with your account:
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/synthia.git
-cd synthia
-git remote add upstream https://github.com/ParkerRex/synthia.git
+git clone https://github.com/YOUR_USERNAME/sylenth1.git
+cd sylenth1
+git remote add upstream https://github.com/ParkerRex/sylenth1.git
 git fetch upstream --prune
 git switch -c codex/describe-your-change upstream/master
 ```
@@ -76,10 +76,10 @@ If you already pushed this branch and the rebase changed its history, use `git p
 
 ## Open a pull request
 
-Open a real PR, not a draft, against `ParkerRex/synthia`'s `master` branch. Use [GitHub's compare page](https://github.com/ParkerRex/synthia/compare) and select your fork and branch, or use the GitHub CLI:
+Open a real PR, not a draft, against `ParkerRex/sylenth1`'s `master` branch. Use [GitHub's compare page](https://github.com/ParkerRex/sylenth1/compare) and select your fork and branch, or use the GitHub CLI:
 
 ```sh
-gh pr create --repo ParkerRex/synthia --base master --head YOUR_USERNAME:YOUR_BRANCH --web
+gh pr create --repo ParkerRex/sylenth1 --base master --head YOUR_USERNAME:YOUR_BRANCH --web
 ```
 
 Replace both placeholders; `YOUR_BRANCH` is the branch you pushed, including its `codex/` prefix. The command opens GitHub's creation form. Submit it as a normal pull request.
