@@ -50,6 +50,8 @@ The developer package contains `ctest.xml` with **11/11 Release CTest entries pa
 | VST3 scan/load/play | Successful in a new qualification set; mapped VST3 identity recorded. |
 | VST3 save/close/reopen/play | Set saved as `native-vst3-validation Project/native-vst3-validation.als`, then Live quit and restarted. It reopened with the current candidate, preserved the two arrangement clips and device, and played after confirmed beat 256. Stereo master meters reached 0.771898; `accessibility-vst3-reopen.json` records the snapshot. This does not establish exhaustive changed-parameter restore. |
 | Bridge parameter read/write | AU `Device On` changed from 1 to 0 and back to 1 with matching readback. Only this host wrapper parameter was configured in the recorded device list; this is not synth-control or automation-envelope proof. |
+| AU stop and tail drain | Playback stopped at beat 283.69057 during the six-note workload. A later read showed all master meters at zero; `live-au-six-note-transport.json` records playing, immediate stop, and drained observations. This does not cover separate all-notes-off or panic actions. |
+| AU and VST3 offline export | Both saved sets exported successfully through Live's native Export Audio/Video dialog. Each WAV contains 661,500 stereo frames at 44.1 kHz, exactly 15 seconds, with audible output and zero clipped samples. See the export evidence below. |
 
 The saved AU set, bridge snapshot, install/identity records, and benchmark JSON remain disposable local evidence under `build/reports/host-qualification`. `workload.json` was prepared before installation; its `plugin_installed: false` field is historical preparation metadata, superseded by the install and mapped-binary records.
 
@@ -67,6 +69,23 @@ The final optimized headless benchmark, recorded in `headless-final-benchmark.js
 - Peak 0.0620938, zero invalid samples, and a passing report.
 
 This is a single headless workload result, not Live process CPU or a verified before/after improvement. `headless-initial-benchmark.json` overlapped an incremental build and explicitly marks its performance evidence invalid; its block size and duration also differ. Do not use it as a paired baseline.
+
+### Current host CPU observation
+
+`live-au-six-note-cpu.json` records one current AU instance playing the identified six-note set from a confirmed beat 256. The loaded inode remained 664522568. Live's current-launch log records 44.1 kHz and 512-sample input/output buffers. The editor was closed. Over 10.115 seconds, cumulative Live process CPU time increased by 5.13 seconds, averaging **50.72% of one CPU core**; the individual `ps` readings ranged from 46.9% to 51.5%.
+
+This includes Live and its two return devices. Earlier stopped readings varied from 15.3% to 47.7%; the stopped sample contained only one sampled Synthia processing path, while playback sampled oscillator, filter, voice, and effects work. These samples do not establish the exact source of Live's idle cost or isolate plugin CPU. No optimization or under-50-percent qualification is claimed. The historical nine-track workload remains unavailable. Raw records are `live-idle-cpu.json`, `live-idle.sample.txt`, and `live-au-six-note.sample.txt`.
+
+### Current host offline exports
+
+Both native export dialogs showed Master output, start 65.1.1, length 8.0.0, stereo, 44.1 kHz, 16-bit WAV, triangular dither, and normalization off. The existing MP3 and analysis-file options were left enabled. Local results:
+
+| Format | WAV evidence | Peak | RMS | Clipped samples |
+| --- | --- | --- | --- | --- |
+| AU | `native-au-offline-12a24a3.wav` and matching JSON | 0.969940 | 0.168245 | 0 |
+| VST3 | `native-vst3-offline-12a24a3.wav` and matching JSON | 0.398041 | 0.103235 | 0 |
+
+Each JSON records the file SHA-256, exact frames, dialog settings, and limits. The two saved sets are not asserted to contain identical synth states; their audio levels are not an AU/VST3 equivalence comparison. No realtime loopback capture was made, so host offline/realtime equivalence remains unverified. Triangular dither also rules out a byte-identity claim from these exports.
 
 ## Ableton bridge boundary
 
@@ -88,16 +107,19 @@ The current MCP client is still **1.4.5**, without [client PR 139](https://githu
 - [x] Install changed candidate, verify mapped identity, repeat AUval and both saved-set reopen/play checks.
 - [x] Native Standalone accessible value, toggle, and Part B action checks.
 - [x] VST3 set save/close/reopen/play.
+- [x] AU transport stop followed by zero output meters for the identified workload.
+- [x] AU and VST3 native offline exports with valid duration, audible output, and no clipping.
+- [x] Current one-instance host CPU observation, with binary identity, sample rate, buffer size, and workload limits.
 - [ ] Native oscillator, part, modulation, and effect control changes in the host.
 - [ ] Comprehensive program/bank/changed-parameter restore in Live.
 - [ ] Host automation record/playback.
 - [ ] Editor open/close while playing, without killing host notes.
-- [ ] Stop, all-notes-off, and panic behavior in Live.
+- [ ] Separate all-notes-off and panic behavior in Live.
 - [ ] Live sample-rate and buffer changes.
 - [ ] Offline/realtime host rendering comparison.
-- [ ] Identified host process CPU measurements under an agreed workload.
+- [ ] Representative multi-instance host performance qualification; the historical nine-track set is unavailable.
 
-Live's main device panel does not expose its editor-open wrench through the available accessibility tool; coordinate attempts return `AXError.notImplemented`, and Show Plug-In Windows did not open an initially closed editor. The bridge exposes only configured device parameters, currently the host's Device On control. Standalone accessibility and processor tests do not substitute for the remaining Live editor/automation checks.
+Live's main device panel does not expose its editor-open wrench through the available accessibility tool; coordinate attempts return `AXError.notImplemented`, and Show Plug-In Windows did not open an initially closed editor. The [Live 11 manual](https://www.ableton.com/en/live-manual/11/working-with-instruments-and-effects/) documents that shortcut as showing/hiding already-open plugin windows. The bridge exposes only configured device parameters, currently the host's Device On control. Standalone accessibility and processor tests do not substitute for the remaining Live editor/automation checks.
 
 ## Scope limits
 

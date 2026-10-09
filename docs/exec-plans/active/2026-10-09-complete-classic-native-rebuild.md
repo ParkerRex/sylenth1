@@ -32,7 +32,8 @@ Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control
 - [x] Build an optimized developer candidate; pass Release 11/11 CTest and 17/17 core reports, AUval, AU/VST3 scan/load/play with mapped binary identity, initial AU save/reopen/play, and an identified headless workload.
 - [x] Commit writable native accessibility controls and focused processor coverage as `12a24a3`; pass Debug 11/11 CTest and 17/17 core reports and confirm unchanged Pluck snapshot pixels.
 - [x] Verify optimized accessibility candidate: 11/11 Release CTest, AUval, new mapped AU/VST3 identities, both saved-set reopen/play checks, and native Standalone control actions.
-- [ ] Complete host automation, comprehensive changed-state restore, lifecycle, buffer/rate, host bounce, and host CPU coverage.
+- [x] Export audible, unclipped 15-second WAVs from both formats in Live; observe AU stop/tail drain and record a current one-instance CPU measurement with explicit limits.
+- [ ] Complete host automation, comprehensive changed-state restore, editor lifecycle, all-notes-off/panic, buffer/rate changes, offline/realtime comparison, and representative multi-instance CPU qualification.
 - [x] Produce and verify ad-hoc-signed developer AU/VST3/Standalone artifacts with universal slices, owned presets, manifest, and checksums.
 - [ ] Qualify public distribution only with required licensing decisions, credentials, reference captures, supported-environment evidence, and publication authorization.
 - [ ] Reconcile all durable docs with the final implementation and outstanding external proof.
