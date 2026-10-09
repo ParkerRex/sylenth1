@@ -1,6 +1,6 @@
 # Classic Native Conformance
 
-Status: integrated native implementation passes the Debug quality gate, 2026-10-09. Optimized host/distribution qualification and original-reference conformance remain open. An implemented control is not automatically a measured match to Sylenth1.
+Status: integrated native implementation through `12a24a3` passes the Debug quality gate, 11/11 Release CTest entries, AU validation, and AU/VST3 saved-set reopen/play in Live 11.3.43, 2026-10-09. Full host qualification, original-reference conformance, and public distribution remain open. An implemented control is not automatically a measured match to Sylenth1.
 
 ## Reference and Release Scope
 
@@ -24,7 +24,11 @@ The interface uses Synthia's own identity and code-drawn assets. Any reference-i
 | Persistence | Self-contained current host-state/program-bank restore; old Synthia compatibility explicitly out of scope | Implemented; XML numeric values, dirty fingerprints, saved baselines and restore tests pass |
 | Visual states | Entire classic canvas, Part A/B, every LCD page, menus, selected/disabled controls, scale behavior | Ten inspected captures have valid bindings; repeated Init export is deterministic; original pixel identity remains unverified |
 
-Current integrated result: all 11 CTest entries and all 17 standalone core reports pass under the Debug quality gate. These include real-processor UI-close and idle FREE-LFO regressions. Generated evidence is under `build/reports`.
+Recorded integrated result: all 11 CTest entries and all 17 standalone core reports pass under the Debug quality gate. The optimized developer package `build/release-artifacts/synthia-native-0.1.0-developer-20261009T183920927525Z` records the same 11/11 and 17/17 passing results in Release, verified ad-hoc signatures, universal slices, and 18 owned presets per bundle. Its manifest identifies clean source `1f246f9`; these results do not qualify later unbuilt edits.
+
+Current host observations establish AU/VST3 saved-set reopen/play after installing the optimized accessibility candidate `12a24a3`, with new mapped executable hashes recorded separately from the earlier package. Native macOS accessibility actions in Standalone successfully edited volume, oscillator waveform/retrigger, and the independent Part B octave. Host synth-control coverage, automation, editor lifecycle, buffer/rate changes, comprehensive state restore, and host bounce comparison remain open. See [the current host record](host-validation/native-rebuild-2026-10-09.md) for exact identities, conditions, and limits.
+
+The recorded Release headless supersaw benchmark rendered five seconds at 48 kHz/128 samples with six held notes, per-block parameter publication, 1.5 seconds warmup, and three repetitions. Median wall time was 562.638 ms (8.88671 times realtime), with zero invalid samples. This is not a historical nine-track Live CPU measurement or a paired performance improvement. Accessibility source `12a24a3` passes 11/11 Debug CTest entries and 17/17 core reports, plus 11/11 Release CTest entries. Its new Pluck snapshot is byte-identical to the gallery image (SHA-256 `140a59dd1d53343d729757d51cbda751caa33567428ab75ddb20a37133a93828`).
 
 The two native LFOs currently expose eight implemented shapes. The supplied older manual describes ten, while current official specifications describe eleven. No verified selected-version list is available. Do not label waveform coverage complete or invent names to satisfy a count.
 

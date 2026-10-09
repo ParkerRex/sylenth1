@@ -29,8 +29,12 @@ Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control
 - [x] Inspect ten deterministic editor captures and fix bindings, glyphs, labels, version text and state initialization.
 - [x] Run adversarial reviews of realtime, current state, routing, UI, reference tooling and packaging boundaries; fix verified findings.
 - [ ] Obtain selected-version original waveform/control and audio/image evidence; close the unverified fidelity gaps.
-- [ ] Build optimized candidate and perform available current-binary AU/VST3 host/performance checks.
-- [ ] Produce and verify developer release artifacts; qualify distribution only with required credentials/evidence.
+- [x] Build an optimized developer candidate; pass Release 11/11 CTest and 17/17 core reports, AUval, AU/VST3 scan/load/play with mapped binary identity, initial AU save/reopen/play, and an identified headless workload.
+- [x] Commit writable native accessibility controls and focused processor coverage as `12a24a3`; pass Debug 11/11 CTest and 17/17 core reports and confirm unchanged Pluck snapshot pixels.
+- [x] Verify optimized accessibility candidate: 11/11 Release CTest, AUval, new mapped AU/VST3 identities, both saved-set reopen/play checks, and native Standalone control actions.
+- [ ] Complete host automation, comprehensive changed-state restore, lifecycle, buffer/rate, host bounce, and host CPU coverage.
+- [x] Produce and verify ad-hoc-signed developer AU/VST3/Standalone artifacts with universal slices, owned presets, manifest, and checksums.
+- [ ] Qualify public distribution only with required licensing decisions, credentials, reference captures, supported-environment evidence, and publication authorization.
 - [ ] Reconcile all durable docs with the final implementation and outstanding external proof.
 
 ## Surprises & Discoveries
@@ -42,7 +46,9 @@ Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control
 - Dirty-state fingerprinting must use actual JUCE step indices and normalized values rather than wide-range physical float round trips.
 - Processor idle skipping initially froze FREE LFOs and long arp intervals. Bounded idle LFO advancement and pending-event checks now have real-processor regression proof.
 - Repeated bank-state scans caused excessive test/restore time; indexed control-state operations and lazy empty slots avoid that work.
-- The historical nine-track Ableton set is absent. A separate qualification set is prepared without claiming historical benchmark equivalence.
+- The historical nine-track Ableton set is absent. A separate six-note qualification set was exercised without claiming historical benchmark equivalence.
+- The initial package manifest and host executable hashes identify source `1f246f9`; accessibility source `12a24a3` has separate passing Debug/Release checks and current mapped host identities.
+- Remote Script 1.7.2 is patched and installed, but the MCP client remains unpatched 1.4.5. Script installation does not establish client PR installation.
 
 ## Decision Log
 
@@ -53,11 +59,15 @@ Deliver Synthia's native AU/VST3 instrument against the classic Sylenth1 control
 
 ## Outcomes & Retrospective
 
-In progress. Completion requires evidence, not simply merged implementation files. External original-plugin references, licensing decisions, signing credentials, and untested host/hardware targets may remain unresolved and must be reported.
+In progress. Accessibility source `12a24a3` passes the Debug quality gate, 11/11 Release CTest, AUval, both saved-set reopen/play checks with current mapped AU/VST3 identity, and native Standalone control actions. It preserves the inspected Pluck pixels. Comprehensive host state restore, automation/lifecycle/render comparison, and measured Live CPU coverage remain open. Live's inaccessible editor-open control limits further automated host interaction. External original-plugin references, licensing decisions, notarization credentials, and untested host/hardware targets remain unresolved. These results do not qualify a public release.
+
+Initial developer artifacts are under `build/release-artifacts/synthia-native-0.1.0-developer-20261009T183920927525Z`. The manifest records clean source `1f246f929a5addfd141aef8c61480608d02119f8`, verified ad-hoc signatures, 18 factory presets per universal bundle, 11 passing Release CTest entries, and 17 passing core reports. Initial installed AU/VST3 hashes match that manifest. The later accessibility build has separate mapped-binary evidence. See [the host qualification record](../../host-validation/native-rebuild-2026-10-09.md).
+
+The final optimized headless benchmark reports a median 562.638 ms for five rendered seconds (8.88671 times realtime) using the supersaw preset, six held notes, 48 kHz, 128-sample blocks, per-block parameter publication, 1.5 seconds warmup, and three repetitions. It records zero invalid samples. It is not a paired before/after result or the unavailable nine-track Live benchmark.
 
 ## Context and Orientation
 
-The C++20 JUCE/CMake project has a preallocated realtime voice engine, APVTS parameter registry, custom preset format, standalone render runner, nine CTest entries, and historic Ableton proof. The current requirement at the start of SPEC supersedes earlier modernized-UI directions.
+The C++20 JUCE/CMake project has a preallocated realtime voice engine, APVTS parameter registry, custom preset format, standalone render runner, eleven CTest entries, and historic plus initial current-candidate Ableton proof. The current requirement at the start of SPEC supersedes earlier modernized-UI directions.
 
 ### In Scope
 

@@ -402,14 +402,14 @@ points.
 The editor renders itself offscreen to PNG when `SYNTHIA_UI_SNAPSHOT=<path.png>`
 is set, so UI states can be captured from scripts without macOS
 screen-recording permission. `SYNTHIA_UI_SNAPSHOT_PRESET=<preset path>` loads a
-preset first (e.g. to capture the Step-LFO grid or modulation halos), and
+preset first to capture its native controls, and
 `SYNTHIA_UI_SNAPSHOT_QUIT=1` exits the standalone after writing the file:
 
 ```bash
 SYNTHIA_UI_SNAPSHOT=/tmp/ui.png \
 SYNTHIA_UI_SNAPSHOT_QUIT=1 \
-SYNTHIA_UI_SNAPSHOT_PRESET="presets/factory/Bass/BA - Wub Stepper 01.SynthiaPreset" \
-./build/SynthiaPlugin_artefacts/Standalone/synthia.app/Contents/MacOS/synthia
+SYNTHIA_UI_SNAPSHOT_PRESET="presets/factory/Pluck/PL - Pluck Core 01.SynthiaPreset" \
+./build/SynthiaPlugin_artefacts/Debug/Standalone/Synthia.app/Contents/MacOS/Synthia
 ```
 
 The hook is a no-op without the environment variable and adds no UI state.
