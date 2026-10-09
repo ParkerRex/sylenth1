@@ -19,6 +19,10 @@ public:
     void processPreparedBlock(float* samples, const float* midiNote, const SynthParameters& parameters,
                               const float* cutoffModSemitones, int numSamples) noexcept;
 
+    void prepareBlock(const FilterParameters& parameters) noexcept;
+    float processPrepared(float input, float midiNote, const FilterParameters& parameters,
+                          float cutoffModSemitones) noexcept;
+
     static float cutoffSemitonesToHz(float semitones) noexcept;
 
 private:
@@ -39,6 +43,10 @@ private:
     float cachedDriveGain = 1.0f;
     float cachedFeedback = 0.0f;
     bool preparedEnabled = false;
+    bool preparedWarmDrive = false;
+    bool preparedNativeTopology = false;
+    bool cachedSelfOscillation = false;
+    float saturateStage(float value) const noexcept;
     bool preparedUseL4 = false;
     FilterMode preparedMode = FilterMode::L4;
     int preparedOversampling = 1;

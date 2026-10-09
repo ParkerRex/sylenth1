@@ -323,13 +323,13 @@ Options parseOptions(int argc, char* argv[])
 
 void ensureParentDirectory(const std::filesystem::path& path)
 {
-    if (path.parent_path() != std::filesystem::path{})
+    if (path.parent_path() != std::filesystem::path {})
         std::filesystem::create_directories(path.parent_path());
 }
 
 void ensureDirectory(const std::filesystem::path& path)
 {
-    if (path != std::filesystem::path{})
+    if (path != std::filesystem::path {})
         std::filesystem::create_directories(path);
 }
 
@@ -575,8 +575,9 @@ int noteNameToMidi(std::string note)
         return 60;
 
     note.erase(std::remove_if(note.begin(), note.end(), [](unsigned char c) {
-        return std::isspace(c) != 0;
-    }), note.end());
+                   return std::isspace(c) != 0;
+               }),
+               note.end());
 
     const auto letter = static_cast<char>(std::toupper(static_cast<unsigned char>(note[0])));
     auto semitone = 0;
@@ -779,8 +780,7 @@ int writeOscillatorReport(const std::filesystem::path& path, const std::string& 
     noiseParameters.osc.noiseLevel = 1.0f;
     auto noisePassed = true;
     for (int i = 0; i < 512; ++i)
-        noisePassed = noisePassed && std::abs(noiseA.renderSample(60, noiseParameters, 0.0f, 0.0f)
-            - noiseB.renderSample(60, noiseParameters, 0.0f, 0.0f)) < 1.0e-7f;
+        noisePassed = noisePassed && std::abs(noiseA.renderSample(60, noiseParameters, 0.0f, 0.0f) - noiseB.renderSample(60, noiseParameters, 0.0f, 0.0f)) < 1.0e-7f;
 
     synth::OscillatorStack sync;
     sync.prepare(sampleRate);
@@ -899,81 +899,6 @@ float finiteOr(float value, float fallback) noexcept
     return std::isfinite(value) ? value : fallback;
 }
 
-synth::ModSource modSourceFromVar(const juce::var& value)
-{
-    if (const auto* spec = synth::findParameterSpec("transmod.1.source"))
-        return static_cast<synth::ModSource>(choiceIndex(*spec, value));
-
-    return synth::ModSource::None;
-}
-
-void applyModSlotDepth(synth::TransModSlotParameters& slot, const std::string& targetId,
-                       float value, const juce::String& depthDomain)
-{
-    value = finiteOr(value, 0.0f);
-    const auto normalized = depthDomain == "Normalized";
-
-    if (targetId == "osc.pitch_semitones")
-        slot.oscPitchSemitones = normalized ? std::clamp(value, -1.0f, 1.0f) * 48.0f : value;
-    else if (targetId == "osc.pulse_width")
-        slot.pulseWidth = std::clamp(value, -1.0f, 1.0f);
-    else if (targetId == "filter.cutoff_semitones")
-    {
-        if (normalized)
-            slot.depth = std::clamp(value, -1.0f, 1.0f);
-        else
-            slot.filterCutoffSemitones = value;
-    }
-    else if (targetId == "amp.level_db")
-        slot.ampLevelDb = normalized ? std::clamp(value, -1.0f, 1.0f) * 24.0f : value;
-    else if (targetId == "amp.pan")
-        slot.pan = std::clamp(value, -1.0f, 1.0f);
-}
-
-void applyModSlotObject(synth::SynthParameters& parameters, const juce::var& slotVar)
-{
-    if (!slotVar.isObject())
-        return;
-
-    const auto* slotObject = slotVar.getDynamicObject();
-    if (slotObject == nullptr)
-        return;
-
-    const auto slotId = slotObject->getProperty(juce::Identifier("slot_id"));
-    if (!slotId.isInt())
-        return;
-
-    const auto slotNumber = static_cast<int>(slotId);
-    if (slotNumber < 1 || slotNumber > synth::transModSlotCount)
-        return;
-
-    auto& slot = parameters.transMod.slots[static_cast<std::size_t>(slotNumber - 1)];
-    slot = {};
-    const auto enabled = slotObject->getProperty(juce::Identifier("enabled"));
-    slot.enabled = enabled.isBool() && static_cast<bool>(enabled);
-    slot.source = modSourceFromVar(slotObject->getProperty(juce::Identifier("source")));
-    const auto scaler = slotObject->getProperty(juce::Identifier("scaler"));
-    slot.scaler = scaler.isVoid() ? synth::ModSource::None : modSourceFromVar(scaler);
-
-    const auto depthDomain = slotObject->getProperty(juce::Identifier("depth_domain")).toString();
-    const auto depths = slotObject->getProperty(juce::Identifier("depths"));
-    if (!depths.isObject())
-        return;
-
-    if (const auto* depthObject = depths.getDynamicObject())
-    {
-        for (const auto& property : depthObject->getProperties())
-        {
-            if (property.value.isInt() || property.value.isInt64() || property.value.isDouble())
-            {
-                applyModSlotDepth(slot, property.name.toString().toStdString(),
-                                  static_cast<float>(static_cast<double>(property.value)),
-                                  depthDomain);
-            }
-        }
-    }
-}
-
 void applyPresetValue(synth::SynthParameters& parameters, const std::string& id, const juce::var& value)
 {
     const auto* spec = synth::findParameterSpec(id);
@@ -981,47 +906,46 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
         return;
 
     const auto numeric = value.isBool() ? (static_cast<bool>(value) ? 1.0f : 0.0f)
-        : (value.isInt() || value.isInt64() || value.isDouble()
-            ? finiteOr(static_cast<float>(static_cast<double>(value)), spec->defaultValue)
-            : spec->defaultValue);
+                                        : (value.isInt() || value.isInt64() || value.isDouble()
+                                               ? finiteOr(static_cast<float>(static_cast<double>(value)), spec->defaultValue)
+                                               : spec->defaultValue);
     const auto choice = spec->kind == synth::ParameterKind::Choice ? choiceIndex(*spec, value) : 0;
 
-    if (id == "voice.mode") parameters.voiceMode = static_cast<synth::VoiceMode>(choice);
+    if (id.starts_with("lfo.2.") || id.starts_with("mod_env.2."))
+    {
+        synth::SynthParameters translated;
+        const auto isLfo = id.starts_with("lfo.2.");
+        if (isLfo)
+        {
+            // Preserve loaded LFO fields while sharing the first LFO field mapping.
+            translated.lfo = parameters.lfo2;
+            applyPresetValue(translated, "lfo." + id.substr(6), value);
+            parameters.lfo2 = translated.lfo;
+        }
+        else
+        {
+            translated.modEnv = parameters.modEnv2;
+            applyPresetValue(translated, "mod_env." + id.substr(10), value);
+            parameters.modEnv2 = translated.modEnv;
+        }
+        return;
+    }
+
+    if (id == "global.sync") parameters.sync = parameters.arp.sync = numeric >= 0.5f;
+    else if (id == "voice.pitch_bend_range") parameters.pitchBendRange = numeric;
+    else if (id == "voice.portamento_mode") parameters.portamentoMode = static_cast<synth::PortamentoMode>(choice);
+    else if (id == "master.level_db") parameters.master.levelDb = numeric;
+    else if (id == "filter_control.cutoff_semitones") parameters.filterControl.cutoffSemitones = numeric;
+    else if (id == "filter_control.resonance") parameters.filterControl.resonance = numeric;
+    else if (id == "filter_control.keytrack") parameters.filterControl.keytrack = numeric;
+    else if (id == "filter_control.drive") parameters.filterControl.drive = numeric;
+    else if (id == "filter_control.warm_drive") parameters.filterControl.warmDrive = numeric >= 0.5f;
+    else if (id == "voice.mode") parameters.voiceMode = static_cast<synth::VoiceMode>(choice);
     else if (id == "voice.polyphony") parameters.polyphony = static_cast<int>(std::round(numeric));
     else if (id == "voice.unison_count") parameters.unisonCount = static_cast<int>(std::round(numeric));
     else if (id == "voice.retrigger") parameters.retrigger = numeric >= 0.5f;
     else if (id == "voice.glide_ms") parameters.glideMs = numeric;
     else if (id == "voice.velocity_glide_ms") parameters.velocityGlideMs = numeric;
-    else if (id == "osc.pitch_semitones") parameters.osc.pitchSemitones = numeric;
-    else if (id == "osc.fine_cents") parameters.osc.fineCents = numeric;
-    else if (id == "osc.stack_count") parameters.osc.stackCount = static_cast<int>(std::round(numeric));
-    else if (id == "osc.stack_detune") parameters.osc.stackDetune = numeric;
-    else if (id == "osc.saw_level") parameters.osc.sawLevel = numeric;
-    else if (id == "osc.pulse_level") parameters.osc.pulseLevel = numeric;
-    else if (id == "osc.noise_level") parameters.osc.noiseLevel = numeric;
-    else if (id == "osc.pulse_width") parameters.osc.pulseWidth = numeric;
-    else if (id == "osc.sub_wave") parameters.osc.subWave = static_cast<synth::SubWave>(choice);
-    else if (id == "osc.sub_octave") parameters.osc.subOctave = choice + 1;
-    else if (id == "osc.sub_level") parameters.osc.subLevel = numeric;
-    else if (id == "osc.sub_pulse_width") parameters.osc.subPulseWidth = numeric;
-    else if (id == "osc.sync_amount") parameters.osc.syncAmount = numeric;
-    else if (id == "filter.enabled") parameters.filter.enabled = numeric >= 0.5f;
-    else if (id == "filter.mode") parameters.filter.mode = static_cast<synth::FilterMode>(choice);
-    else if (id == "filter.cutoff_semitones") parameters.filter.cutoffSemitones = numeric;
-    else if (id == "filter.resonance") parameters.filter.resonance = numeric;
-    else if (id == "filter.drive") parameters.filter.drive = numeric;
-    else if (id == "filter.keytrack") parameters.filter.keytrack = numeric;
-    else if (id == "filter.oversampling") parameters.filter.oversampling = choice;
-    else if (id == "amp.drive") parameters.amp.drive = numeric;
-    else if (id == "amp.level_db") parameters.amp.levelDb = numeric;
-    else if (id == "amp.pan") parameters.amp.pan = numeric;
-    else if (id == "amp.pan_spread") parameters.amp.panSpread = numeric;
-    else if (id == "amp.unison_spread") parameters.amp.unisonSpread = numeric;
-    else if (id == "amp.analog") parameters.amp.analog = numeric;
-    else if (id == "amp_env.attack_ms") parameters.ampEnv.attackMs = numeric;
-    else if (id == "amp_env.decay_ms") parameters.ampEnv.decayMs = numeric;
-    else if (id == "amp_env.sustain") parameters.ampEnv.sustain = numeric;
-    else if (id == "amp_env.release_ms") parameters.ampEnv.releaseMs = numeric;
     else if (id == "mod_env.attack_ms") parameters.modEnv.attackMs = numeric;
     else if (id == "mod_env.decay_ms") parameters.modEnv.decayMs = numeric;
     else if (id == "mod_env.sustain") parameters.modEnv.sustain = numeric;
@@ -1034,16 +958,23 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
     else if (id == "lfo.gate_mode") parameters.lfo.gateMode = static_cast<synth::LfoGateMode>(choice);
     else if (id == "lfo.mono") parameters.lfo.mono = numeric >= 0.5f;
     else if (id == "lfo.swing") parameters.lfo.swing = numeric;
+    else if (id == "lfo.gain") parameters.lfo.gain = numeric;
+    else if (id == "lfo.offset") parameters.lfo.offset = numeric;
+    else if (id == "lfo.free") parameters.lfo.free = numeric >= 0.5f;
+    else if (id == "lfo.step_count") parameters.lfo.stepCount = static_cast<int>(std::round(numeric));
+    else if (id == "lfo.step_smooth") parameters.lfo.stepSmooth = numeric;
+    else if (id.starts_with("lfo.step."))
+    {
+        const auto index = std::stoi(id.substr(9)) - 1;
+        if (index >= 0 && index < synth::lfoStepSlotCount)
+            parameters.lfo.steps[static_cast<std::size_t>(index)] = numeric;
+    }
     else if (id == "direct.filter_keytrack") parameters.direct.filterKeytrack = numeric;
     else if (id == "direct.filter_lfo_semitones") parameters.direct.filterLfoSemitones = numeric;
     else if (id == "direct.filter_mod_env_semitones") parameters.direct.filterModEnvSemitones = numeric;
     else if (id == "direct.osc_keytrack_semitones") parameters.direct.oscKeytrackSemitones = numeric;
     else if (id == "direct.osc_lfo_semitones") parameters.direct.oscLfoSemitones = numeric;
     else if (id == "direct.osc_mod_env_semitones") parameters.direct.oscModEnvSemitones = numeric;
-    else if (id == "direct.pulse_keytrack") parameters.direct.pulseKeytrack = numeric;
-    else if (id == "direct.pulse_lfo") parameters.direct.pulseLfo = numeric;
-    else if (id == "direct.pulse_mod_env") parameters.direct.pulseModEnv = numeric;
-    else if (id == "fx.enabled") parameters.fx.enabled = numeric >= 0.5f;
     else if (id == "fx.saturation_enabled") parameters.fx.saturationEnabled = numeric >= 0.5f;
     else if (id == "fx.distortion_mode") parameters.fx.distortionMode = static_cast<synth::DistortionMode>(choice);
     else if (id == "fx.saturation_mix") parameters.fx.saturationMix = numeric;
@@ -1053,6 +984,7 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
     else if (id == "fx.phaser_rate_hz") parameters.fx.phaserRateHz = numeric;
     else if (id == "fx.phaser_depth") parameters.fx.phaserDepth = numeric;
     else if (id == "fx.phaser_feedback") parameters.fx.phaserFeedback = numeric;
+    else if (id == "fx.phaser_sync_division") parameters.fx.phaserSyncDivision = static_cast<synth::DelaySyncDivision>(choice);
     else if (id == "fx.delay_enabled") parameters.fx.delayEnabled = numeric >= 0.5f;
     else if (id == "fx.delay_mix") parameters.fx.delayMix = numeric;
     else if (id == "fx.delay_sync_division") parameters.fx.delaySyncDivision = static_cast<synth::DelaySyncDivision>(choice);
@@ -1064,6 +996,7 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
     else if (id == "fx.chorus_mix") parameters.fx.chorusMix = numeric;
     else if (id == "fx.chorus_rate_hz") parameters.fx.chorusRateHz = numeric;
     else if (id == "fx.chorus_depth_ms") parameters.fx.chorusDepthMs = numeric;
+    else if (id == "fx.chorus_sync_division") parameters.fx.chorusSyncDivision = static_cast<synth::DelaySyncDivision>(choice);
     else if (id == "fx.eq_enabled") parameters.fx.eqEnabled = numeric >= 0.5f;
     else if (id == "fx.eq_low_gain_db") parameters.fx.eqLowGainDb = numeric;
     else if (id == "fx.eq_high_gain_db") parameters.fx.eqHighGainDb = numeric;
@@ -1072,8 +1005,30 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
     else if (id == "fx.compressor_ratio") parameters.fx.compressorRatio = numeric;
     else if (id == "fx.compressor_makeup_db") parameters.fx.compressorMakeupDb = numeric;
     else if (id == "fx.compressor_mix") parameters.fx.compressorMix = numeric;
-    else if (id == "quality.realtime_mode") parameters.quality.realtimeMode = static_cast<synth::QualityMode>(choice);
-    else if (id == "quality.offline_mode") parameters.quality.offlineMode = static_cast<synth::QualityMode>(choice);
+    else if (id == "fx.phaser_center_hz") parameters.fx.phaserCenterHz = numeric;
+    else if (id == "fx.phaser_spread") parameters.fx.phaserSpread = numeric;
+    else if (id == "fx.phaser_lr_offset") parameters.fx.phaserLrOffset = numeric;
+    else if (id == "fx.phaser_width") parameters.fx.phaserWidth = numeric;
+    else if (id == "fx.chorus_delay_ms") parameters.fx.chorusDelayMs = numeric;
+    else if (id == "fx.chorus_feedback") parameters.fx.chorusFeedback = numeric;
+    else if (id == "fx.chorus_width") parameters.fx.chorusWidth = numeric;
+    else if (id == "fx.eq_low_frequency_hz") parameters.fx.eqLowFrequencyHz = numeric;
+    else if (id == "fx.eq_high_frequency_hz") parameters.fx.eqHighFrequencyHz = numeric;
+    else if (id == "fx.delay_time_left_ms") parameters.fx.delayTimeLeftMs = numeric;
+    else if (id == "fx.delay_time_right_ms") parameters.fx.delayTimeRightMs = numeric;
+    else if (id == "fx.delay_spread") parameters.fx.delaySpread = numeric;
+    else if (id == "fx.delay_width") parameters.fx.delayWidth = numeric;
+    else if (id == "fx.delay_low_cut_hz") parameters.fx.delayLowCutHz = numeric;
+    else if (id == "fx.delay_high_cut_hz") parameters.fx.delayHighCutHz = numeric;
+    else if (id == "fx.delay_smear") parameters.fx.delaySmear = numeric;
+    else if (id == "fx.reverb_pre_delay_ms") parameters.fx.reverbPreDelayMs = numeric;
+    else if (id == "fx.reverb_damp") parameters.fx.reverbDamp = numeric;
+    else if (id == "fx.reverb_width") parameters.fx.reverbWidth = numeric;
+    else if (id == "fx.compressor_attack_ms") parameters.fx.compressorAttackMs = numeric;
+    else if (id == "fx.compressor_release_ms") parameters.fx.compressorReleaseMs = numeric;
+    else if (id == "fx.chorus_dual_mode") parameters.fx.chorusDualMode = numeric >= 0.5f;
+    else if (id == "fx.delay_ping_pong") parameters.fx.delayPingPong = numeric >= 0.5f;
+    else if (id == "fx.delay_right_sync_division") parameters.fx.delayRightSyncDivision = static_cast<synth::DelaySyncDivision>(choice);
     else if (id == "ramp.enabled") parameters.ramp.enabled = numeric >= 0.5f;
     else if (id == "ramp.mode") parameters.ramp.mode = static_cast<synth::RampMode>(choice);
     else if (id == "ramp.delay_ms") parameters.ramp.delayMs = numeric;
@@ -1087,6 +1042,9 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
     else if (id == "arp.hold") parameters.arp.hold = numeric >= 0.5f;
     else if (id == "arp.swing") parameters.arp.swing = numeric;
     else if (id == "arp.step_count") parameters.arp.stepCount = static_cast<int>(std::round(numeric));
+    else if (id == "arp.wrap") parameters.arp.wrap = static_cast<int>(std::round(numeric));
+    else if (id == "arp.velocity_mode") parameters.arp.velocityMode = static_cast<synth::ArpVelocityMode>(choice);
+    else if (id == "arp.time_ms") parameters.arp.timeMs = numeric;
     else if (id.starts_with("arp.step."))
     {
         const auto stepStart = std::string("arp.step.").size();
@@ -1147,6 +1105,22 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
         else if (field == "pan") layer.pan = numeric;
         else if (field == "solo") layer.solo = numeric >= 0.5f;
         else if (field == "mute") layer.mute = numeric >= 0.5f;
+        else if (field == "filter.input") layer.input = static_cast<synth::FilterInput>(choice);
+        else if (field.starts_with("filter.") || field.starts_with("amp_env."))
+        {
+            if (field == "filter.enabled") layer.filter.enabled = numeric >= 0.5f;
+            else if (field == "filter.mode") layer.filter.mode = static_cast<synth::FilterMode>(choice);
+            else if (field == "filter.cutoff_semitones") layer.filter.cutoffSemitones = numeric;
+            else if (field == "filter.resonance") layer.filter.resonance = numeric;
+            else if (field == "filter.drive") layer.filter.drive = numeric;
+            else if (field == "filter.keytrack") layer.filter.keytrack = numeric;
+            else if (field == "filter.warm_drive") layer.filter.warmDrive = numeric >= 0.5f;
+            else if (field == "filter.oversampling") layer.filter.oversampling = choice;
+            else if (field == "amp_env.attack_ms") layer.ampEnv.attackMs = numeric;
+            else if (field == "amp_env.decay_ms") layer.ampEnv.decayMs = numeric;
+            else if (field == "amp_env.sustain") layer.ampEnv.sustain = numeric;
+            else if (field == "amp_env.release_ms") layer.ampEnv.releaseMs = numeric;
+        }
         else if (field.starts_with("osc."))
         {
             const auto oscillatorStart = std::string("osc.").size();
@@ -1194,10 +1168,15 @@ void applyPresetValue(synth::SynthParameters& parameters, const std::string& id,
         else if (field == "scaler") slot.scaler = static_cast<synth::ModSource>(choice);
         else if (field == "depth") slot.depth = numeric;
         else if (field == "osc_pitch_semitones") slot.oscPitchSemitones = numeric;
-        else if (field == "pulse_width") slot.pulseWidth = numeric;
         else if (field == "filter_cutoff_semitones") slot.filterCutoffSemitones = numeric;
         else if (field == "amp_level_db") slot.ampLevelDb = numeric;
         else if (field == "pan") slot.pan = numeric;
+        else if (field.starts_with("native."))
+        {
+            for (const auto& destination : synth::modulationDestinationCatalog())
+                if (destination.nativeIndex >= 0 && destination.depthSuffix == field)
+                    slot.nativeDepths[static_cast<std::size_t>(destination.nativeIndex)] = numeric;
+        }
     }
 }
 
@@ -1255,6 +1234,40 @@ bool applyPreparedStateParameters(const juce::ValueTree& state,
         applyPresetValue(parameters, id, child.getProperty("value"));
     }
 
+    const auto physicalValue = [&state](const std::string& id) {
+        const auto parameter = state.getChildWithProperty("id", juce::String(id));
+        return parameter.isValid() ? static_cast<float>(parameter.getProperty("value")) : 0.0f;
+    };
+    const auto& destinations = synth::modulationDestinationCatalog();
+    for (int slotNumber = 1; slotNumber <= synth::transModSlotCount; ++slotNumber)
+    {
+        auto& slot = parameters.transMod.slots[static_cast<std::size_t>(slotNumber - 1)];
+        for (int route = 1; route <= 2; ++route)
+        {
+            const auto prefix = "transmod." + std::to_string(slotNumber) + ".route." + std::to_string(route) + ".";
+            const auto selected = static_cast<int>(physicalValue(prefix + "destination")) - 1;
+            if (selected < 0 || selected >= static_cast<int>(destinations.size()))
+                continue;
+            slot.enabled = true;
+            if (slotNumber <= 4)
+            {
+                constexpr std::array<synth::ModSource, 4> sources { synth::ModSource::ModEnv, synth::ModSource::ModEnv2,
+                                                                    synth::ModSource::Lfo, synth::ModSource::Lfo2 };
+                slot.source = sources[static_cast<std::size_t>(slotNumber - 1)];
+            }
+            const auto& destination = destinations[static_cast<std::size_t>(selected)];
+            const auto scale = destination.destination == synth::ModulationDestination::FilterCutoff ? 72.0f : destination.maximumDepth;
+            const auto amount = physicalValue(prefix + "amount") * scale;
+            switch (destination.destination)
+            {
+                case synth::ModulationDestination::OscPitch: slot.oscPitchSemitones += amount; break;
+                case synth::ModulationDestination::FilterCutoff: slot.filterCutoffSemitones += amount; break;
+                case synth::ModulationDestination::AmpLevel: slot.ampLevelDb += amount; break;
+                case synth::ModulationDestination::Pan: slot.pan += amount; break;
+                case synth::ModulationDestination::Native: slot.nativeDepths[static_cast<std::size_t>(destination.nativeIndex)] += amount; break;
+            }
+        }
+    }
     return true;
 }
 
@@ -1278,81 +1291,15 @@ bool prepareRandomizedParameters(std::uint32_t seed,
 
 bool loadPresetParameters(const std::filesystem::path& path, synth::SynthParameters& parameters, std::string& error)
 {
-    if (!std::filesystem::is_regular_file(path))
+    RenderParameterOwner owner;
+    const auto prepared = synth::preparePresetState(owner.parameters, path);
+    if (!prepared.loaded)
     {
-        error = "preset file missing: " + path.string();
+        error = prepared.message.empty() ? "preset preparation failed: " + path.string() : prepared.message;
         return false;
     }
-
-    const auto parsed = juce::JSON::parse(juceFileForPath(path));
-
-    if (!parsed.isObject())
-    {
-        error = "preset root must be a JSON object: " + path.string();
-        return false;
-    }
-
-    const auto* root = parsed.getDynamicObject();
-    if (root == nullptr)
-    {
-        error = "preset root object unavailable: " + path.string();
-        return false;
-    }
-
-    const juce::DynamicObject* presetRoot = nullptr;
-    const auto fileType = root->getProperty(juce::Identifier("fileType"));
-    if (!fileType.isString() || fileType.toString() != "SynthiaPreset")
-    {
-        error = "preset fileType must be SynthiaPreset: " + path.string();
-        return false;
-    }
-
-    const auto preset = root->getProperty(juce::Identifier("preset"));
-    if (!preset.isObject())
-    {
-        error = "SynthiaPreset payload unavailable: " + path.string();
-        return false;
-    }
-
-    presetRoot = preset.getDynamicObject();
-
-    const auto validation = synth::validatePresetFile(path);
-    if (!validation.passed())
-    {
-        error = "preset validation failed: " + path.string();
-        if (!validation.errors.empty())
-            error += ": " + validation.errors.front();
-        return false;
-    }
-
-    const auto parameterVar = presetRoot->getProperty(juce::Identifier("parameters"));
-    if (!parameterVar.isObject())
-    {
-        error = "preset parameters must be an object: " + path.string();
-        return false;
-    }
-
-    const auto* parameterObject = parameterVar.getDynamicObject();
-    if (parameterObject == nullptr)
-    {
-        error = "preset parameter object unavailable: " + path.string();
-        return false;
-    }
-
-    for (const auto& property : parameterObject->getProperties())
-        applyPresetValue(parameters, property.name.toString().toStdString(), property.value);
-
-    const auto modSlots = presetRoot->getProperty(juce::Identifier("mod_slots"));
-    if (modSlots.isArray())
-    {
-        if (const auto* slots = modSlots.getArray())
-        {
-            for (const auto& slot : *slots)
-                applyModSlotObject(parameters, slot);
-        }
-    }
-
-    return true;
+    parameters = {};
+    return applyPreparedStateParameters(prepared.state, parameters, error);
 }
 
 bool loadMidiFixture(const std::filesystem::path& path, int sampleRate,
@@ -1527,10 +1474,8 @@ double spectralCentroidHz(const std::vector<float>& left, const std::vector<floa
 
         for (int i = 0; i < sampleCount; ++i)
         {
-            const auto mono = 0.5 * (static_cast<double>(left[static_cast<std::size_t>(i)])
-                + static_cast<double>(right[static_cast<std::size_t>(i)]));
-            const auto window = 0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi
-                * static_cast<double>(i) / static_cast<double>(sampleCount - 1));
+            const auto mono = 0.5 * (static_cast<double>(left[static_cast<std::size_t>(i)]) + static_cast<double>(right[static_cast<std::size_t>(i)]));
+            const auto window = 0.5 - 0.5 * std::cos(2.0 * juce::MathConstants<double>::pi * static_cast<double>(i) / static_cast<double>(sampleCount - 1));
             const auto angle = radiansPerSample * static_cast<double>(i);
             real += mono * window * std::cos(angle);
             imag += mono * window * std::sin(angle);
@@ -1625,11 +1570,9 @@ struct ModulationReportMetrics
     float velocityGlideEnd = 0.0f;
     bool velocityGlidePassed = false;
     float directOscPitch = 0.0f;
-    float directPulse = 0.0f;
     float directFilter = 0.0f;
     bool directRoutesPassed = false;
     float transOscPitch = 0.0f;
-    float transPulse = 0.0f;
     float transFilter = 0.0f;
     float transAmp = 0.0f;
     float transPan = 0.0f;
@@ -1697,7 +1640,6 @@ int writeModulationReport(const Options& options)
         parameters.ramp.enabled = true;
         parameters.ramp.riseMs = 1.0f;
         parameters.direct.oscKeytrackSemitones = 12.0f;
-        parameters.direct.pulseKeytrack = 0.25f;
         parameters.direct.filterKeytrack = 0.5f;
         parameters.macro.motion = 0.5f;
         parameters.filter.enabled = false;
@@ -1707,7 +1649,6 @@ int writeModulationReport(const Options& options)
         slot.source = synth::ModSource::Ramp;
         slot.scaler = synth::ModSource::Macro1;
         slot.oscPitchSemitones = 12.0f;
-        slot.pulseWidth = 0.2f;
         slot.filterCutoffSemitones = 24.0f;
         slot.ampLevelDb = 6.0f;
         slot.pan = 0.4f;
@@ -1720,18 +1661,14 @@ int writeModulationReport(const Options& options)
 
         const auto snapshot = firstActiveSnapshot(engine);
         metrics.directOscPitch = snapshot.directOscPitchSemitones;
-        metrics.directPulse = snapshot.directPulseWidth;
         metrics.directFilter = snapshot.directFilterCutoffSemitones;
         metrics.transOscPitch = snapshot.transModOscPitchSemitones;
-        metrics.transPulse = snapshot.transModPulseWidth;
         metrics.transFilter = snapshot.transModFilterCutoffSemitones;
         metrics.transAmp = snapshot.transModAmpLevelDb;
         metrics.transPan = snapshot.transModPan;
         metrics.directRoutesPassed = std::abs(metrics.directOscPitch - 12.0f) < 0.05f
-            && std::abs(metrics.directPulse - 0.25f) < 0.01f
             && std::abs(metrics.directFilter - 6.0f) < 0.05f;
         metrics.transModScalerPassed = std::abs(metrics.transOscPitch - 6.0f) < 0.05f
-            && std::abs(metrics.transPulse - 0.1f) < 0.01f
             && std::abs(metrics.transFilter - 12.0f) < 0.05f
             && std::abs(metrics.transAmp - 3.0f) < 0.05f
             && std::abs(metrics.transPan - 0.2f) < 0.01f;
@@ -1746,8 +1683,8 @@ int writeModulationReport(const Options& options)
             metrics.modSlotSchemaPassed = slot.enabled
                 && slot.source == synth::ModSource::Ramp
                 && slot.scaler == synth::ModSource::Macro1
-                && std::abs(slot.filterCutoffSemitones - 12.0f) < 0.01f
-                && std::abs(slot.pan - 0.25f) < 0.01f;
+                && std::abs(slot.nativeDepths[static_cast<std::size_t>(synth::NativeModDestination::FilterACutoff)] - 12.0f) < 0.01f
+                && std::abs(slot.nativeDepths[static_cast<std::size_t>(synth::NativeModDestination::LayerAPan)] - 0.25f) < 0.01f;
         }
     }
 
@@ -1900,11 +1837,9 @@ int writeModulationReport(const Options& options)
     out << "  \"velocity_glide_end\": " << metrics.velocityGlideEnd << ",\n";
     out << "  \"velocity_glide_passed\": " << (metrics.velocityGlidePassed ? "true" : "false") << ",\n";
     out << "  \"direct_osc_pitch_semitones\": " << metrics.directOscPitch << ",\n";
-    out << "  \"direct_pulse_width\": " << metrics.directPulse << ",\n";
     out << "  \"direct_filter_cutoff_semitones\": " << metrics.directFilter << ",\n";
     out << "  \"direct_routes_passed\": " << (metrics.directRoutesPassed ? "true" : "false") << ",\n";
     out << "  \"transmod_osc_pitch_semitones\": " << metrics.transOscPitch << ",\n";
-    out << "  \"transmod_pulse_width\": " << metrics.transPulse << ",\n";
     out << "  \"transmod_filter_cutoff_semitones\": " << metrics.transFilter << ",\n";
     out << "  \"transmod_amp_level_db\": " << metrics.transAmp << ",\n";
     out << "  \"transmod_pan\": " << metrics.transPan << ",\n";
@@ -1967,18 +1902,6 @@ const char* toString(RenderFxMode mode) noexcept
     return "unknown";
 }
 
-const char* toString(synth::QualityMode mode) noexcept
-{
-    switch (mode)
-    {
-        case synth::QualityMode::Eco: return "eco";
-        case synth::QualityMode::Normal: return "normal";
-        case synth::QualityMode::High: return "high";
-    }
-
-    return "unknown";
-}
-
 struct PresetRenderResult
 {
     bool ok = false;
@@ -1996,7 +1919,6 @@ struct PresetRenderResult
     float fxTailSeconds = 0.0f;
     float tempoBpm = 128.0f;
     float postLastEventSeconds = 0.0f;
-    synth::QualityMode qualityMode = synth::QualityMode::Normal;
     float noteLocalLfoSpread = 0.0f;
     bool noteLocalMotionPassed = false;
     double wetDryMaxAbsDiff = 0.0;
@@ -2021,9 +1943,11 @@ void writeFailureReport(const std::filesystem::path& reportPath,
 PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
                                         const std::filesystem::path& fixturePath,
                                         PresetRenderVariant variant,
-                                        RenderFxMode fxMode = RenderFxMode::Dry)
+                                        RenderFxMode fxMode = RenderFxMode::Dry,
+                                        int blockSize = 1)
 {
     PresetRenderResult result;
+    blockSize = std::clamp(blockSize, 1, 8192);
     if (variant == PresetRenderVariant::MonoLfo)
     {
         parameters.lfo.mono = true;
@@ -2035,7 +1959,6 @@ PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
         parameters.lfo.gateMode = synth::LfoGateMode::PolyOn;
     }
 
-    parameters.quality.activeMode = parameters.quality.offlineMode;
     switch (fxMode)
     {
         case RenderFxMode::AsPrepared:
@@ -2048,7 +1971,6 @@ PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
             break;
     }
 
-    result.qualityMode = parameters.quality.activeMode;
     result.tempoBpm = parameters.tempoBpm;
     result.tempoSyncedDelaySamples = synth::tempoSyncedDelaySamples(result.sampleRate, parameters.tempoBpm,
                                                                     parameters.fx.delaySyncDivision);
@@ -2061,22 +1983,24 @@ PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
 
     result.fixtureEvents = static_cast<int>(events.size());
     result.lastEventSample = events.empty() ? 0 : events.back().sample;
-    const auto voiceTailSeconds = std::max(parameters.ampEnv.releaseMs, parameters.modEnv.releaseMs) * 0.001f;
+    const auto voiceTailSeconds = std::max({ parameters.layers[0].ampEnv.releaseMs, parameters.layers[1].ampEnv.releaseMs,
+                                             parameters.modEnv.releaseMs, parameters.modEnv2.releaseMs })
+        * 0.001f;
     result.postLastEventSeconds = std::max(0.4f, std::max(result.fxTailSeconds, voiceTailSeconds) + 0.1f);
     result.sampleCount = std::max(static_cast<int>(result.sampleRate * 1.35),
                                   result.lastEventSample
                                       + static_cast<int>(std::ceil(static_cast<double>(result.sampleRate)
-                                                                  * result.postLastEventSeconds)));
+                                                                   * result.postLastEventSeconds)));
 
     synth::SynthEngine engine;
-    engine.prepare(result.sampleRate, 1);
+    engine.prepare(result.sampleRate, blockSize);
     engine.setParameters(parameters);
 
     result.left.assign(static_cast<std::size_t>(result.sampleCount), 0.0f);
     result.right.assign(static_cast<std::size_t>(result.sampleCount), 0.0f);
 
     auto nextEvent = std::size_t { 0 };
-    for (int i = 0; i < result.sampleCount; ++i)
+    for (int i = 0; i < result.sampleCount;)
     {
         while (nextEvent < events.size() && events[nextEvent].sample == i)
         {
@@ -2084,13 +2008,16 @@ PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
             ++nextEvent;
         }
 
+        auto count = std::min(blockSize, result.sampleCount - i);
+        if (nextEvent < events.size())
+            count = std::min(count, events[nextEvent].sample - i);
         const auto stats = engine.process(&result.left[static_cast<std::size_t>(i)],
-                                          &result.right[static_cast<std::size_t>(i)], 1);
+                                          &result.right[static_cast<std::size_t>(i)], count);
         if (stats.invalidSamples > 0)
         {
             result.invalidDuringRender += stats.invalidSamples;
-            result.left[static_cast<std::size_t>(i)] = 0.0f;
-            result.right[static_cast<std::size_t>(i)] = 0.0f;
+            std::fill_n(result.left.data() + i, count, 0.0f);
+            std::fill_n(result.right.data() + i, count, 0.0f);
         }
 
         auto activeVoiceCount = 0;
@@ -2120,6 +2047,7 @@ PresetRenderResult renderParameterAudio(synth::SynthParameters parameters,
 
         if (hasMultipleNotes && activeVoiceCount > 1)
             result.noteLocalLfoSpread = std::max(result.noteLocalLfoSpread, maxLfo - minLfo);
+        i += count;
     }
 
     result.metrics = analyzeAudio(result.left, result.right, result.sampleRate);
@@ -2199,7 +2127,7 @@ bool applyModulationRouteEditsToParameters(
 bool hasExpectedRoute(const synth::ModulationRouteView& view)
 {
     return std::any_of(view.activeRoutes.begin(), view.activeRoutes.end(), [](const auto& route) {
-        return route.slotNumber == 3
+        return route.slotNumber == 8
             && route.sourceId == "macro.motion"
             && route.scalerId == "none"
             && route.destinationId == "amp.level"
@@ -2238,13 +2166,11 @@ int writeModulationRouteRenderReport(const Options& options)
         return 1;
     }
 
-    const auto write = synth::buildModulationRouteWrite({
-        3,
-        "macro.motion",
-        "none",
-        "amp.level",
-        6.0f
-    });
+    const auto write = synth::buildModulationRouteWrite({ 8,
+                                                          "macro.motion",
+                                                          "none",
+                                                          "amp.level",
+                                                          6.0f });
     if (!write.ok)
     {
         writeFailureReport(options.output, "modulation-route-render", write.message);
@@ -2261,7 +2187,7 @@ int writeModulationRouteRenderReport(const Options& options)
     const auto routeView = synth::buildModulationRouteView(routedParameters.transMod);
     const auto routeViewPassed = hasExpectedRoute(routeView);
 
-    const auto clear = synth::buildModulationSlotClear(3);
+    const auto clear = synth::buildModulationSlotClear(8);
     if (!clear.ok)
     {
         writeFailureReport(options.output, "modulation-route-render", clear.message);
@@ -2304,7 +2230,7 @@ int writeModulationRouteRenderReport(const Options& options)
     out << "  \"suite\": \"modulation-route-render\",\n";
     out << "  \"preset\": \"" << genericString(presetPath) << "\",\n";
     out << "  \"fixture\": \"" << genericString(options.fixturePath) << "\",\n";
-    out << "  \"slot_number\": 3,\n";
+    out << "  \"slot_number\": 8,\n";
     out << "  \"source_id\": \"macro.motion\",\n";
     out << "  \"scaler_id\": \"none\",\n";
     out << "  \"destination_id\": \"amp.level\",\n";
@@ -2369,7 +2295,6 @@ void writePresetRenderReport(const std::filesystem::path& reportPath,
     out << "  \"delay_division_beats\": " << result.delayDivisionBeats << ",\n";
     out << "  \"tempo_synced_delay_samples\": " << result.tempoSyncedDelaySamples << ",\n";
     out << "  \"fx_tail_seconds\": " << result.fxTailSeconds << ",\n";
-    out << "  \"quality_mode\": \"" << toString(result.qualityMode) << "\",\n";
     out << "  \"peak\": " << result.metrics.peak << ",\n";
     out << "  \"rms\": " << result.metrics.rms << ",\n";
     out << "  \"rms_dbfs\": " << result.metrics.rmsDbfs << ",\n";
@@ -2548,77 +2473,184 @@ void evaluateWetDifference(PresetRenderResult& wet, const PresetRenderResult& dr
     const auto diff = compareAudio(wet, dry);
     wet.wetDryMaxAbsDiff = diff.maxAbs;
     wet.wetDryRmsDiff = diff.rms;
-    wet.wetMeaningfulPassed = wet.fxTailSeconds > 0.0f
+    wet.wetMeaningfulPassed = wet.ok && dry.ok
+        && wet.metrics.invalid == 0 && dry.metrics.invalid == 0
         && diff.maxAbs > 1.0e-4
         && diff.rms > 1.0e-5;
     wet.passed = wet.passed && wet.wetMeaningfulPassed;
 }
 
+int writeWetDifferenceContractReport(const std::filesystem::path& reportPath,
+                                     const std::filesystem::path& fixturePath)
+{
+    synth::SynthParameters parameters;
+    parameters.fx.saturationEnabled = true;
+    parameters.fx.saturationMix = 0.7f;
+    parameters.fx.saturationDrive = 0.8f;
+    parameters.fx.phaserEnabled = false;
+    parameters.fx.chorusEnabled = false;
+    parameters.fx.eqEnabled = false;
+    parameters.fx.delayEnabled = false;
+    parameters.fx.reverbEnabled = false;
+    parameters.fx.compressorEnabled = false;
+    const auto dry = renderParameterAudio(parameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Dry);
+    auto wet = renderParameterAudio(parameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Wet);
+    evaluateWetDifference(wet, dry);
+    const auto audibleWithoutTimeBasedFx = wet.ok && dry.ok && wet.passed && wet.wetMeaningfulPassed;
+    auto zeroDeclaredTail = wet;
+    zeroDeclaredTail.fxTailSeconds = 0.0f;
+    evaluateWetDifference(zeroDeclaredTail, dry);
+    const auto zeroDeclaredTailPassed = zeroDeclaredTail.wetMeaningfulPassed;
+
+    auto identical = dry;
+    // A declared tail cannot substitute for an audible difference.
+    identical.fxTailSeconds = 2.0f;
+    evaluateWetDifference(identical, dry);
+    const auto identicalRejected = !identical.wetMeaningfulPassed;
+
+    parameters.fx.saturationEnabled = false;
+    auto disabled = renderParameterAudio(parameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Wet);
+    evaluateWetDifference(disabled, dry);
+    const auto disabledRejected = disabled.ok && !disabled.wetMeaningfulPassed;
+
+    const auto passed = audibleWithoutTimeBasedFx && zeroDeclaredTailPassed && identicalRejected && disabledRejected;
+    std::ofstream out(reportPath);
+    out << "{\n  \"schema_version\": 1,\n  \"suite\": \"wet-difference-contract\",\n";
+    out << "  \"audible_without_delay_or_reverb_passed\": " << boolString(audibleWithoutTimeBasedFx) << ",\n";
+    out << "  \"actual_fx_tail_seconds\": " << wet.fxTailSeconds << ",\n";
+    out << "  \"zero_declared_tail_passed\": " << boolString(zeroDeclaredTailPassed) << ",\n";
+    out << "  \"identical_with_declared_tail_rejected\": " << boolString(identicalRejected) << ",\n";
+    out << "  \"disabled_effects_rejected\": " << boolString(disabledRejected) << ",\n";
+    out << "  \"wet_dry_max_abs_diff\": " << wet.wetDryMaxAbsDiff << ",\n";
+    out << "  \"wet_dry_rms_diff\": " << wet.wetDryRmsDiff << ",\n";
+    out << "  \"passed\": " << boolString(passed) << "\n}\n";
+    return passed ? 0 : 1;
+}
+
+int writeNativePresetLoadingContractReport(const std::filesystem::path& reportPath)
+{
+    synth::SynthParameters parameters;
+    std::string error;
+    if (!loadPresetParameters("tests/fixtures/native-loader-validation.SynthiaPreset", parameters, error))
+    {
+        writeFailureReport(reportPath, "native-preset-loading-contract", error);
+        return 1;
+    }
+    synth::SynthEngine engine;
+    engine.prepare(48000.0, 64);
+    engine.setParameters(parameters);
+    engine.noteOn(60, 1.0f);
+    std::vector<float> left(12000);
+    std::vector<float> right(12000);
+    const auto stats = engine.process(left.data(), right.data(), static_cast<int>(left.size()));
+    const auto measured = estimateFrequency(left, 48000.0);
+    const auto expected = synth::midiNoteToHz(84.0f);
+    const auto cents = measured > 0.0f ? std::abs(1200.0f * std::log2(measured / expected)) : 9999.0f;
+    const auto metrics = analyzeAudio(left, right, 48000);
+    const auto passed = stats.invalidSamples == 0
+        && metrics.invalid == 0 && metrics.rms > 0.001 && metrics.peak < 1.0f && cents < 5.0f;
+    std::ofstream out(reportPath);
+    out << "{\n  \"schema_version\": 1,\n  \"suite\": \"native-preset-loading-contract\",\n";
+    out << "  \"measured_hz\": " << measured << ",\n  \"expected_hz\": " << expected << ",\n";
+    out << "  \"tuning_error_cents\": " << cents << ",\n  \"passed\": " << boolString(passed) << "\n}\n";
+    return passed ? 0 : 1;
+}
+
+int writeNativeGlobalRoutingReport(const std::filesystem::path& reportPath,
+                                   const std::filesystem::path& fixturePath)
+{
+    RenderParameterOwner owner;
+    const auto set = [&owner](const char* id, float value) {
+        auto* parameter = owner.parameters.getParameter(id);
+        if (parameter == nullptr)
+            return false;
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+        return true;
+    };
+    if (!set("fx.phaser_enabled", 1.0f) || !set("fx.phaser_mix", 0.7f)
+        || !set("fx.phaser_center_hz", 1400.0f) || !set("master.level_db", -18.0f)
+        || !set("macro.motion", 0.5f))
+    {
+        writeFailureReport(reportPath, "native-global-routing", "Native phaser parameter missing");
+        return 1;
+    }
+    synth::SynthParameters baselineParameters;
+    std::string error;
+    if (!applyPreparedStateParameters(owner.parameters.copyState(), baselineParameters, error))
+    {
+        writeFailureReport(reportPath, "native-global-routing", error);
+        return 1;
+    }
+    const auto route = synth::buildModulationRouteWrite({ 8, "macro.motion", "none", "fx.phaser_center_hz", 2000.0f });
+    const auto clear = synth::buildModulationSlotClear(8);
+    auto routedParameters = baselineParameters;
+    if (!route.ok || !clear.ok || !applyModulationRouteEditsToParameters(routedParameters, route.edits, error))
+    {
+        writeFailureReport(reportPath, "native-global-routing", error.empty() ? "Phaser route compilation failed" : error);
+        return 1;
+    }
+    auto clearedParameters = routedParameters;
+    if (!applyModulationRouteEditsToParameters(clearedParameters, clear.edits, error))
+    {
+        writeFailureReport(reportPath, "native-global-routing", error);
+        return 1;
+    }
+    const auto baseline = renderParameterAudio(baselineParameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Wet);
+    const auto routed = renderParameterAudio(routedParameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Wet);
+    const auto cleared = renderParameterAudio(clearedParameters, fixturePath, PresetRenderVariant::Default, RenderFxMode::Wet);
+    const auto changed = compareAudio(baseline, routed);
+    const auto restored = compareAudio(baseline, cleared);
+    const auto baseUnchanged = routedParameters.fx.phaserCenterHz == baselineParameters.fx.phaserCenterHz;
+    const auto passed = baseline.passed && routed.passed && cleared.passed && baseUnchanged
+        && changed.maxAbs > 1.0e-4 && changed.rms > 1.0e-5 && restored.maxAbs <= 1.0e-7 && restored.rms <= 1.0e-9;
+    std::ofstream out(reportPath);
+    out << "{\n  \"schema_version\": 1,\n  \"suite\": \"native-global-routing\",\n";
+    out.precision(std::numeric_limits<float>::max_digits10);
+    out << "  \"baseline_phaser_center_hz\": " << baselineParameters.fx.phaserCenterHz << ",\n";
+    out << "  \"routed_phaser_center_hz\": " << routedParameters.fx.phaserCenterHz << ",\n";
+    out << "  \"visible_phaser_center_unchanged\": " << boolString(baseUnchanged) << ",\n";
+    out << "  \"routed_max_abs_diff\": " << changed.maxAbs << ",\n  \"routed_rms_diff\": " << changed.rms << ",\n";
+    out << "  \"cleared_max_abs_diff\": " << restored.maxAbs << ",\n  \"cleared_rms_diff\": " << restored.rms << ",\n";
+    out << "  \"passed\": " << boolString(passed) << "\n}\n";
+    return passed ? 0 : 1;
+}
+
 int writeOfflineRealtimeCompareReport(const Options& options)
 {
-    synth::SynthParameters baseParameters;
+    synth::SynthParameters parameters;
     std::string error;
-    if (!loadPresetParameters(options.presetPath, baseParameters, error))
+    if (!loadPresetParameters(options.presetPath, parameters, error))
     {
         writeFailureReport(options.output, "offline-realtime-compare", error);
         return 1;
     }
-
-    auto realtimeParameters = baseParameters;
-    realtimeParameters.quality.offlineMode = realtimeParameters.quality.realtimeMode;
-
-    const auto realtime = renderParameterAudio(realtimeParameters, options.fixturePath,
-                                               PresetRenderVariant::Default,
-                                               RenderFxMode::AsPrepared);
-    const auto offline = renderParameterAudio(baseParameters, options.fixturePath,
-                                              PresetRenderVariant::Default,
-                                              RenderFxMode::AsPrepared);
+    const auto realtime = renderParameterAudio(parameters, options.fixturePath,
+                                               PresetRenderVariant::Default, RenderFxMode::AsPrepared, 64);
+    const auto offline = renderParameterAudio(parameters, options.fixturePath,
+                                              PresetRenderVariant::Default, RenderFxMode::AsPrepared, 512);
     if (!realtime.ok || !offline.ok)
     {
-        writeFailureReport(options.output, "offline-realtime-compare",
-                           !realtime.ok ? realtime.error : offline.error);
+        writeFailureReport(options.output, "offline-realtime-compare", !realtime.ok ? realtime.error : offline.error);
         return 1;
     }
-
-    const auto diff = compareAudio(offline, realtime);
-    constexpr auto minMaxAbsDiff = 1.0e-5;
-    constexpr auto minRmsDiff = 1.0e-6;
-    constexpr auto maxMaxAbsDiff = 0.5;
-    constexpr auto maxRmsDiff = 0.1;
-
-    const auto qualityModesDiffer = realtime.qualityMode != offline.qualityMode;
+    const auto difference = compareAudio(offline, realtime);
+    constexpr auto maxAbsoluteTolerance = 1.0e-7;
+    constexpr auto rmsTolerance = 1.0e-9;
+    const auto equivalent = realtime.left.size() == offline.left.size()
+        && difference.maxAbs <= maxAbsoluteTolerance && difference.rms <= rmsTolerance;
     const auto bothFinite = realtime.passed && offline.passed;
-    const auto differenceMeaningful = diff.maxAbs >= minMaxAbsDiff && diff.rms >= minRmsDiff;
-    const auto differenceBounded = diff.maxAbs <= maxMaxAbsDiff && diff.rms <= maxRmsDiff;
-    const auto passed = bothFinite && qualityModesDiffer && differenceMeaningful && differenceBounded;
-
+    const auto passed = bothFinite && equivalent;
     ensureParentDirectory(options.output);
     std::ofstream out(options.output);
-    out << "{\n";
-    out << "  \"schema_version\": 1,\n";
-    out << "  \"suite\": \"offline-realtime-compare\",\n";
-    out << "  \"preset\": \"" << genericString(options.presetPath) << "\",\n";
-    out << "  \"fixture\": \"" << genericString(options.fixturePath) << "\",\n";
-    out << "  \"realtime_quality_mode\": \"" << toString(realtime.qualityMode) << "\",\n";
-    out << "  \"offline_quality_mode\": \"" << toString(offline.qualityMode) << "\",\n";
-    out << "  \"realtime_peak\": " << realtime.metrics.peak << ",\n";
-    out << "  \"offline_peak\": " << offline.metrics.peak << ",\n";
-    out << "  \"realtime_rms\": " << realtime.metrics.rms << ",\n";
-    out << "  \"offline_rms\": " << offline.metrics.rms << ",\n";
-    out << "  \"max_abs_diff\": " << diff.maxAbs << ",\n";
-    out << "  \"rms_diff\": " << diff.rms << ",\n";
-    out << "  \"peak_delta\": " << diff.peakDelta << ",\n";
-    out << "  \"min_max_abs_diff\": " << minMaxAbsDiff << ",\n";
-    out << "  \"min_rms_diff\": " << minRmsDiff << ",\n";
-    out << "  \"max_max_abs_diff\": " << maxMaxAbsDiff << ",\n";
-    out << "  \"max_rms_diff\": " << maxRmsDiff << ",\n";
-    out << "  \"quality_modes_differ\": " << boolString(qualityModesDiffer) << ",\n";
-    out << "  \"both_finite\": " << boolString(bothFinite) << ",\n";
-    out << "  \"difference_meaningful\": " << boolString(differenceMeaningful) << ",\n";
-    out << "  \"difference_bounded\": " << boolString(differenceBounded) << ",\n";
-    out << "  \"passed\": " << boolString(passed) << "\n";
-    out << "}\n";
-
+    out << "{\n  \"schema_version\": 2,\n  \"suite\": \"offline-realtime-compare\",\n";
+    out << "  \"preset\": " << jsonString(options.presetPath) << ",\n";
+    out << "  \"fixture\": " << jsonString(options.fixturePath) << ",\n";
+    out << "  \"realtime_block_samples\": 64,\n  \"offline_block_samples\": 512,\n";
+    out << "  \"realtime_peak\": " << realtime.metrics.peak << ",\n  \"offline_peak\": " << offline.metrics.peak << ",\n";
+    out << "  \"max_abs_diff\": " << difference.maxAbs << ",\n  \"rms_diff\": " << difference.rms << ",\n";
+    out << "  \"max_absolute_tolerance\": " << maxAbsoluteTolerance << ",\n  \"rms_tolerance\": " << rmsTolerance << ",\n";
+    out << "  \"both_finite\": " << boolString(bothFinite) << ",\n  \"same_state_equivalent\": " << boolString(equivalent) << ",\n";
+    out << "  \"passed\": " << boolString(passed) << "\n}\n";
     return passed ? 0 : 1;
 }
 
@@ -2842,6 +2874,21 @@ int writeCoreSuite(const Options& options)
         routeRenderOptions.output = outputDir / "modulation-route-render.json";
         addItem("modulation-route-render", routeRenderOptions.output,
                 writeModulationRouteRenderReport(routeRenderOptions));
+    }
+
+    {
+        const auto reportPath = outputDir / "native-preset-loading-contract.json";
+        addItem("native-preset-loading-contract", reportPath, writeNativePresetLoadingContractReport(reportPath));
+    }
+
+    {
+        const auto reportPath = outputDir / "native-global-routing.json";
+        addItem("native-global-routing", reportPath, writeNativeGlobalRoutingReport(reportPath, fixturePath));
+    }
+
+    {
+        const auto reportPath = outputDir / "wet-difference-contract.json";
+        addItem("wet-difference-contract", reportPath, writeWetDifferenceContractReport(reportPath, fixturePath));
     }
 
     {
@@ -3084,10 +3131,13 @@ int writePatchRecreationSuite(const Options& options)
     for (const auto& patch : patchRecreationCases())
     {
         const auto presetPath = factoryPresetPathForId(patch.id);
+        const auto patchFixture = patch.id == "pad-wide-01" && fixturePath == std::filesystem::path("fixtures/midi/overlap-pluck.mid")
+            ? std::filesystem::path("fixtures/midi/held-pad-triad.mid")
+            : fixturePath;
         const auto reportPath = outputDir / (std::string(patch.id) + "-" + toString(patch.fxMode) + ".json");
         const auto wavPath = artifactDir / (std::string(patch.id) + "-" + toString(patch.fxMode) + ".wav");
 
-        auto render = renderPresetAudio(presetPath, fixturePath, patch.variant, patch.fxMode);
+        auto render = renderPresetAudio(presetPath, patchFixture, patch.variant, patch.fxMode);
         const auto arpChordStatePassed = !patch.requireArpChordStateProof
             || arpChordPresetStateMatches(presetPath);
         auto passed = false;
@@ -3100,7 +3150,7 @@ int writePatchRecreationSuite(const Options& options)
         {
             if (patch.fxMode == RenderFxMode::Wet)
             {
-                const auto dryReference = renderPresetAudio(presetPath, fixturePath,
+                const auto dryReference = renderPresetAudio(presetPath, patchFixture,
                                                             patch.variant, RenderFxMode::Dry);
                 if (dryReference.ok)
                 {
@@ -3114,7 +3164,7 @@ int writePatchRecreationSuite(const Options& options)
             }
 
             writeWav16(wavPath, render.left, render.right, render.sampleRate);
-            writePresetRenderReport(reportPath, render, presetPath, fixturePath, wavPath,
+            writePresetRenderReport(reportPath, render, presetPath, patchFixture, wavPath,
                                     patch.fxMode, patch.variant);
             passed = render.passed
                 && (!patch.requireWetProof || render.wetMeaningfulPassed)

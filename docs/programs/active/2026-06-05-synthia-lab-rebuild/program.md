@@ -4,7 +4,7 @@ title: Sylenth Lab Rebuild
 status: active
 created_at: 2026-06-05
 completed_at: null
-summary: Coordinate the Phase 1 Sylenth-style rebuild, Phase 2 AI sound/arp generation, and Phase 3 conversational VST control roadmap.
+summary: Complete the classic native Sylenth-style instrument and qualify its macOS release; defer browser and AI extensions.
 post_build_recap: null
 read_when:
   - Resuming the current synthia product roadmap.
@@ -52,14 +52,18 @@ Project truth surfaces:
 
 ## Current State
 
+2026-10-09 update: the active scope is the exact-reference classic native rebuild in `docs/exec-plans/active/2026-10-09-complete-classic-native-rebuild.md` and the current release contract at the start of `SPEC.md`. The audit found missing independent part paths, original control families, and valid current-release proof. The June completion labels below describe their original slices only. Browser/Wasm, AI generation, and conversational control are deferred from this release.
+
 The repo already has a buildable JUCE/CMake AU, VST3, and standalone instrument with a Layer A/B-capable subtractive engine, A1/A2/B1/B2 oscillator-slot rendering, layer enable/mute/solo/level/pan state, APVTS parameter registry, preset validation, factory/user/legacy preset browser workflow, a scrollable tabbed editor, TransMod-style modulation route inspection, global MIDI Learn, onboard fixed-order FX, core render validation, and current Ableton smoke evidence.
 
 Commit `075150d` created the current Sylenth lab roadmap, imported `Sylenth1Manual.pdf`, `Serum_Manual.pdf`, and the 25-image Sylenth screenshot corpus, and replaced the stale legacy doc references.
 
-The current Program is not release hardening. It is a product expansion Program. The old pluck core is useful scaffolding but not the Phase 1 destination.
+The current Program now includes native release qualification after conformance work. The user explicitly removed old-patch compatibility on 2026-10-09; the old pluck core must not constrain the new classic control behavior.
 
 ## Progress
 
+- [x] 2026-10-09: Audit current source, fresh build/tests, UI and original manual; authorize six-agent native rebuild in an isolated worktree.
+- [ ] 2026-10-09: Complete and qualify the classic native rebuild under the new execution plan.
 - [x] 2026-06-05 EDT: Committed the Sylenth lab roadmap and local evidence corpus in `075150d`.
 - [x] 2026-06-05 EDT: Created this Program packet for the current Phase 1/2/3 product roadmap.
 - [x] 2026-06-05 EDT: Executed the first Phase 1 engine/state backbone: A/B layer state and A1/A2/B1/B2 oscillator-slot state, with Layer A mapped to the current sound path and Layer B disabled by default.
@@ -178,7 +182,7 @@ Planned child ExecPlans are listed in `plan-split-recommendation.md`.
 
 ## Next Slice
 
-Product-order next Codex slice: no non-UI Phase 1 Ableton host-matrix item remains open. Continue bounded Claude Code UI visual/control polish unless release criteria add stricter waveform-null proof.
+Current next slice: execute the 2026-10-09 classic native plan. Do not treat the historical June matrix or modern UI completion as proof of classic conformance. The independent A/B paths, original control behavior, reference comparisons, and distribution gates must be assessed against the integrated current candidate.
 
 Preset browser, visible invalid-preset browser errors, arp/step/chord, FX rack, modulation inspection/write adapter with audio render proof, model-backed patch cost, backend preset commands, preset workflow state model plus visible dirty/init/randomize/reset/A-B and metadata-aware safe-save controls, layer/slot rendering, and MIDI controller bridge state now exist. Claude Code can take bounded visual polish passes over those ready surfaces. The bronze pass moved the app toward Sylenth's warm visual language, but top-strip/LCD fidelity, one-screen Sound-page density, browser/preset integration, and modulation/effects screenshot rhythm remain open; per-route bypass/remove, per-control MIDI context menus, expanded modulation destinations, and per-layer filter/envelope/master parity remain later slices.
 

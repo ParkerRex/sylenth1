@@ -41,6 +41,8 @@ resolve_artifact_dir() {
 artifact_dir="$(resolve_artifact_dir "$artifact_root" "${2:-}")"
 [[ -n "$artifact_dir" ]] || fail "could not resolve plugin artifact directory under $artifact_root"
 
+"$root_dir/scripts/check-plugin-bundles.sh" "$build_dir" "${2:-}"
+
 au_src="$artifact_dir/AU/$product_bundle.component"
 vst3_src="$artifact_dir/VST3/$product_bundle.vst3"
 au_dest="$HOME/Library/Audio/Plug-Ins/Components"
@@ -72,8 +74,6 @@ sign_installed_bundle() {
   codesign --verify --deep --strict "$bundle" >/dev/null
   printf '%s codesign: ad-hoc signed for local host scanning\n' "$label"
 }
-
-rm -rf "$au_dest/Synth.component" "$vst3_dest/Synth.vst3"
 
 sign_installed_bundle "AU" "$au_dest/$product_bundle.component"
 sign_installed_bundle "VST3" "$vst3_dest/$product_bundle.vst3"

@@ -11,6 +11,8 @@ This directory holds implementation-facing documentation for synthia. `../SPEC.m
 
 ## Engineering Docs
 
+- `CLASSIC_PARITY.md`: current native classic release scope, reference policy, control coverage, and proof gaps.
+- `exec-plans/active/2026-10-09-complete-classic-native-rebuild.md`: active implementation and release qualification plan.
 - `ARCHITECTURE.md`: component model, planned code layout, realtime boundaries.
 - `BUILD_RELEASE.md`: optimized macOS bundle builds, local Ableton install, packaging, and release upload handoff.
 - `PRESET_SCHEMA.md`: preset and host-state shape.

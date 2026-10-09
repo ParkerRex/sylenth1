@@ -78,7 +78,7 @@ SYNTHIA_ALWAYS_INLINE bool isTiny(float value) noexcept
 
 void Filter::prepare(double newSampleRate) noexcept
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
     reset();
 }
 
@@ -162,8 +162,14 @@ float Filter::process(float input, float midiNote, const SynthParameters& parame
 // coefficient, which can change per sample under modulation.
 void Filter::prepareBlock(const SynthParameters& parameters) noexcept
 {
-    const auto& filter = parameters.filter;
+    prepareBlock(parameters.filter);
+}
+
+void Filter::prepareBlock(const FilterParameters& filter) noexcept
+{
     preparedEnabled = filter.enabled;
+    preparedWarmDrive = filter.warmDrive;
+    preparedNativeTopology = filter.nativeTopology;
     if (!preparedEnabled)
         return;
 
@@ -176,23 +182,33 @@ void Filter::prepareBlock(const SynthParameters& parameters) noexcept
     const auto driveAmount = clampKnownFinite(filter.drive, 0.0f, 1.0f);
     const auto resonance = clampKnownFinite(filter.resonance, 0.0f, 1.0f);
     if (std::abs(cachedDriveAmount - driveAmount) > 0.000001f
-        || std::abs(cachedResonance - resonance) > 0.000001f)
+        || std::abs(cachedResonance - resonance) > 0.000001f
+        || cachedSelfOscillation != filter.selfOscillation)
     {
         cachedDriveGain = 1.0f + driveAmount * 9.0f;
-        cachedFeedback = resonance * (3.85f / (1.0f + driveAmount * 1.35f));
+        cachedFeedback = resonance * ((filter.selfOscillation ? 4.35f : 3.85f) / (1.0f + driveAmount * 1.35f));
         cachedDriveAmount = driveAmount;
         cachedResonance = resonance;
+        cachedSelfOscillation = filter.selfOscillation;
+        if (filter.selfOscillation && resonance > 0.95f && isTiny(stage[0]) && isTiny(stage[3]))
+            stage[0] = 0.00001f;
     }
 }
 
 float Filter::processPrepared(float input, float midiNote, const SynthParameters& parameters,
                               float cutoffModSemitones) noexcept
 {
+    return processPrepared(input, midiNote, parameters.filter, cutoffModSemitones);
+}
+
+float Filter::processPrepared(float input, float midiNote, const FilterParameters& parameters,
+                              float cutoffModSemitones) noexcept
+{
     if (!preparedEnabled)
         return input;
 
     const auto keytrackSemitones = (midiNote - 60.0f) * preparedKeytrack;
-    const auto cutoffSemitones = clampKnownFinite(parameters.filter.cutoffSemitones + keytrackSemitones
+    const auto cutoffSemitones = clampKnownFinite(parameters.cutoffSemitones + keytrackSemitones
                                                       + cutoffModSemitones,
                                                   0.0f, 136.0f);
     if (std::abs(cachedCutoffSemitones - cutoffSemitones) > 0.000001f
@@ -248,7 +264,15 @@ float Filter::cutoffSemitonesToHz(float semitones) noexcept
     return semitonesToHz(clampFast(semitones, 0.0f, 136.0f));
 }
 
-SYNTHIA_ALWAYS_INLINE void Filter::processStages(float input, float coefficient, float feedback, float driveGain) noexcept
+SYNTHIA_ALWAYS_INLINE float Filter::saturateStage(float value) const noexcept
+{
+    if (!preparedWarmDrive) return softClip(value);
+    value = clampFast(value, -3.0f, 3.0f);
+    const auto squared = value * value;
+    return value * (27.0f + squared) / (27.0f + 9.0f * squared);
+}
+
+void Filter::processStages(float input, float coefficient, float feedback, float driveGain) noexcept
 {
     const auto flushState = isTiny(input);
 
@@ -256,25 +280,25 @@ SYNTHIA_ALWAYS_INLINE void Filter::processStages(float input, float coefficient,
     stage[0] += coefficient * (previous - clippedStage[0]);
     if (flushState)
         stage[0] = flushTiny(stage[0]);
-    clippedStage[0] = softClip(stage[0]);
+    clippedStage[0] = saturateStage(stage[0]);
 
     previous = clippedStage[0];
     stage[1] += coefficient * (previous - clippedStage[1]);
     if (flushState)
         stage[1] = flushTiny(stage[1]);
-    clippedStage[1] = softClip(stage[1]);
+    clippedStage[1] = saturateStage(stage[1]);
 
     previous = clippedStage[1];
     stage[2] += coefficient * (previous - clippedStage[2]);
     if (flushState)
         stage[2] = flushTiny(stage[2]);
-    clippedStage[2] = softClip(stage[2]);
+    clippedStage[2] = saturateStage(stage[2]);
 
     previous = clippedStage[2];
     stage[3] += coefficient * (previous - clippedStage[3]);
     if (flushState)
         stage[3] = flushTiny(stage[3]);
-    clippedStage[3] = softClip(stage[3]);
+    clippedStage[3] = saturateStage(stage[3]);
 }
 
 SYNTHIA_ALWAYS_INLINE float Filter::processCoreL4(float input, float coefficient, float feedback, float driveGain) noexcept
@@ -297,11 +321,13 @@ SYNTHIA_ALWAYS_INLINE float Filter::processCore(float input, float coefficient, 
         case FilterMode::B2:
             return (stage[0] - stage[1]) * 2.0f;
         case FilterMode::B4:
-            return (stage[2] - stage[3]) * 3.0f;
+            return preparedNativeTopology ? (stage[1] - 2.0f * stage[2] + stage[3]) * 4.0f
+                                          : (stage[2] - stage[3]) * 3.0f;
         case FilterMode::H2:
-            return input - stage[1];
+            return preparedNativeTopology ? input - 2.0f * stage[0] + stage[1] : input - stage[1];
         case FilterMode::H4:
-            return input - stage[3];
+            return preparedNativeTopology ? input - 4.0f * stage[0] + 6.0f * stage[1] - 4.0f * stage[2] + stage[3]
+                                          : input - stage[3];
         case FilterMode::Peak2:
             return stage[1] - (input - stage[1]);
         case FilterMode::Notch2:

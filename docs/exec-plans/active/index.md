@@ -4,14 +4,15 @@ Current Program: `docs/programs/active/2026-06-05-synthia-lab-rebuild/program.md
 
 Active child plans:
 
+- `2026-10-09-complete-classic-native-rebuild.md` (current execution plan)
 - `2026-06-06-handoff-sylenth-visual-information-architecture.md` (`handoff_target: Claude Code`)
 - `2026-06-05-handoff-modulation-preset-arp-ui-polish.md` (`handoff_target: Claude Code`)
 
-Active Claude handoff slice: `2026-06-06-handoff-sylenth-visual-information-architecture.md`.
+The October native rebuild supersedes the June UI handoff directions. The older plans remain historical records until closeout; their description of the remaining work as visual polish is no longer an accurate release assessment.
 
 UI handoff rule: the modern shell handoff is completed, and the roadmap truth audit says A/B layer plus four-slot rendering is real enough for a broad visual information architecture pass. Preset browser, invalid-preset browser error rows, preset workflow controls, metadata-aware safe-save controls, arp/step/chord, FX rack, patch cost, modulation inspection, and single-slot modulation route writing have model-backed surfaces; the main visible surfaces have screenshot evidence, while invalid-row bottom-browser proof remains manual until JUCE viewport automation is reliable. Per-route bypass/remove, richer bank management, and expanded modulation destinations still need later schema/workflow work.
 
-Product-order Codex slice: no non-UI Phase 1 Ableton host-matrix item remains open. AU/VST3 automation record/playback and Ableton offline/realtime content comparison are covered by host proof; rendered route behavior is covered by standalone modulation-route render proof. Ableton currently covers route visibility/playback, not audio-diff modulation capture, and strict offline/realtime waveform-null proof is not claimed. Remaining Phase 1 work is Claude Code UI visual/control polish.
+Current execution order: complete independent native sound paths and real control bindings, reconstruct the classic editor, pass focused behavior and compatibility tests, measure reference fidelity, refresh current-build host/performance evidence, and qualify release artifacts. June host records are historical and do not certify changed binaries. Browser/Wasm and AI work are deferred.
 
 Completed child plans:
 

@@ -15,9 +15,7 @@
 #include <string>
 #include <vector>
 
-class SynthAudioProcessor final : public juce::AudioProcessor
-                                , private juce::Timer
-                                , private juce::AudioProcessorValueTreeState::Listener
+class SynthAudioProcessor final : public juce::AudioProcessor, private juce::Timer, private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     SynthAudioProcessor();
@@ -38,11 +36,28 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override;
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Init"; }
-    void changeProgramName(int, const juce::String&) override {}
+    static constexpr int programsPerSubBank = 128;
+    static constexpr int subBankCount = 4;
+    static constexpr int programCount = programsPerSubBank * subBankCount;
+    int getNumPrograms() override { return programCount; }
+    int getCurrentProgram() override { return currentProgram.load(std::memory_order_acquire); }
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
+    void changeProgramName(int index, const juce::String& name) override;
+    bool selectProgram(int index, juce::String& message);
+    bool previousProgram(juce::String& message);
+    bool nextProgram(juce::String& message);
+    bool copyCurrentProgram(juce::String& message);
+    bool pasteCurrentProgram(juce::String& message);
+    bool insertCurrentProgram(juce::String& message);
+    bool deleteCurrentProgram(juce::String& message);
+    bool loadProgramBank(const juce::File& file, juce::String& message);
+    bool saveProgramBank(const juce::File& file, bool overwrite, juce::String& message);
+    int getSelectedPart() const noexcept { return selectedPart.load(std::memory_order_acquire); }
+    void setSelectedPart(int part) noexcept { selectedPart.store(std::clamp(part, 0, 1), std::memory_order_release); }
+    float getEffectiveParameterValue(const juce::String& parameterId) const noexcept;
+    std::optional<int> getLearnedMidiController(const juce::String& parameterId) const;
+    bool submitUiMidiMessage(const juce::MidiMessage& message) noexcept;
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
@@ -74,6 +89,8 @@ public:
         int midiEvents = 0;
         int invalidSamples = 0;
         float peak = 0.0f;
+        float peakLeft = 0.0f;
+        float peakRight = 0.0f;
         synth::PatchCostEstimate patchCost;
         juce::String architecture;
         juce::String currentPreset;
@@ -126,6 +143,8 @@ public:
         bool lfoVoiceActive = false;
         float lfoPhase = 0.0f;
         float lfoValue = 0.0f;
+        float pitchBend = 0.0f;
+        float modWheel = 0.0f;
     };
     UiVisualSnapshot getUiVisualSnapshot() const noexcept;
     // Copies the most recent output-scope samples (oldest first). Returns the
@@ -134,6 +153,37 @@ public:
     static constexpr int scopeCapacity = 2048;
 
 private:
+    struct ProgramSlot
+    {
+        juce::String name { "Init" };
+        juce::ValueTree state;
+        juce::ValueTree baseline;
+    };
+    void storeCurrentProgram();
+    juce::ValueTree createProgramBankState();
+    bool restoreProgramBankState(const juce::ValueTree& bank, juce::String& message);
+    void applyPendingProgramRequest();
+    void drainUiMidiMessages() noexcept;
+    std::array<ProgramSlot, programCount> programs;
+    ProgramSlot programClipboard;
+    bool programClipboardValid = false;
+    mutable juce::CriticalSection programLock;
+    std::atomic<int> selectedPart { 0 };
+    std::atomic<int> currentProgram { 0 };
+    std::atomic<int> requestedProgram { -1 };
+    std::atomic<int> midiSubBank { 0 };
+    static constexpr int uiMidiCapacity = 256;
+    juce::AbstractFifo uiMidiFifo { uiMidiCapacity };
+    std::atomic<bool> uiMidiReleaseOverflow { false };
+    std::atomic<int> uiRequestedPitchWheel { -1 };
+    std::atomic<int> uiRequestedModWheel { -1 };
+    struct UiMidiPacket
+    {
+        std::array<juce::uint8, 3> bytes {};
+        int size = 0;
+    };
+    std::array<UiMidiPacket, uiMidiCapacity> uiMidiPackets;
+
     struct PendingMidiControllerValue
     {
         std::atomic<int> value { -1 };
@@ -144,7 +194,6 @@ private:
     {
         struct RawLayerOscillator
         {
-            std::atomic<float>* enabled = nullptr;
             std::atomic<float>* voices = nullptr;
             std::atomic<float>* waveform = nullptr;
             std::atomic<float>* octave = nullptr;
@@ -161,7 +210,6 @@ private:
 
         struct RawLayer
         {
-            std::atomic<float>* enabled = nullptr;
             std::atomic<float>* levelDb = nullptr;
             std::atomic<float>* pan = nullptr;
             std::atomic<float>* solo = nullptr;
@@ -176,7 +224,6 @@ private:
             std::atomic<float>* scaler = nullptr;
             std::atomic<float>* depth = nullptr;
             std::atomic<float>* oscPitchSemitones = nullptr;
-            std::atomic<float>* pulseWidth = nullptr;
             std::atomic<float>* filterCutoffSemitones = nullptr;
             std::atomic<float>* ampLevelDb = nullptr;
             std::atomic<float>* pan = nullptr;
@@ -201,53 +248,19 @@ private:
         std::atomic<float>* voiceMode = nullptr;
         std::atomic<float>* voicePolyphony = nullptr;
         std::atomic<float>* voiceUnisonCount = nullptr;
-        std::atomic<float>* voiceRetrigger = nullptr;
         std::atomic<float>* voiceGlideMs = nullptr;
         std::atomic<float>* voiceVelocityGlideMs = nullptr;
         std::array<RawLayer, synth::layerCount> layers {};
-        std::atomic<float>* oscPitchSemitones = nullptr;
-        std::atomic<float>* oscFineCents = nullptr;
-        std::atomic<float>* oscStackCount = nullptr;
-        std::atomic<float>* oscStackDetune = nullptr;
-        std::atomic<float>* oscSawLevel = nullptr;
-        std::atomic<float>* oscPulseLevel = nullptr;
-        std::atomic<float>* oscNoiseLevel = nullptr;
-        std::atomic<float>* oscPulseWidth = nullptr;
-        std::atomic<float>* oscSubWave = nullptr;
-        std::atomic<float>* oscSubOctave = nullptr;
-        std::atomic<float>* oscSubLevel = nullptr;
-        std::atomic<float>* oscSubPulseWidth = nullptr;
-        std::atomic<float>* oscSyncAmount = nullptr;
-        std::atomic<float>* oscPhaseReset = nullptr;
-        std::atomic<float>* filterEnabled = nullptr;
-        std::atomic<float>* filterMode = nullptr;
-        std::atomic<float>* filterCutoffSemitones = nullptr;
-        std::atomic<float>* filterResonance = nullptr;
-        std::atomic<float>* filterDrive = nullptr;
-        std::atomic<float>* filterKeytrack = nullptr;
-        std::atomic<float>* filterOversampling = nullptr;
-        std::atomic<float>* ampDrive = nullptr;
-        std::atomic<float>* ampLevelDb = nullptr;
-        std::atomic<float>* ampPan = nullptr;
-        std::atomic<float>* ampPanSpread = nullptr;
-        std::atomic<float>* ampUnisonSpread = nullptr;
-        std::atomic<float>* ampAnalog = nullptr;
-        std::atomic<float>* ampAttack = nullptr;
-        std::atomic<float>* ampDecay = nullptr;
-        std::atomic<float>* ampSustain = nullptr;
-        std::atomic<float>* ampRelease = nullptr;
         std::atomic<float>* modAttack = nullptr;
         std::atomic<float>* modDecay = nullptr;
         std::atomic<float>* modSustain = nullptr;
         std::atomic<float>* modRelease = nullptr;
         std::atomic<float>* lfoShape = nullptr;
-        std::atomic<float>* lfoRateMode = nullptr;
         std::atomic<float>* lfoRateHz = nullptr;
         std::atomic<float>* lfoSyncDivision = nullptr;
         std::atomic<float>* lfoPhaseDegrees = nullptr;
         std::atomic<float>* lfoGateMode = nullptr;
         std::atomic<float>* lfoMono = nullptr;
-        std::atomic<float>* lfoSwing = nullptr;
         std::atomic<float>* lfoStepCount = nullptr;
         std::atomic<float>* lfoStepSmooth = nullptr;
         std::array<std::atomic<float>*, synth::lfoStepSlotCount> lfoSteps {};
@@ -274,10 +287,6 @@ private:
         std::atomic<float>* directOscKeytrackSemitones = nullptr;
         std::atomic<float>* directOscLfoSemitones = nullptr;
         std::atomic<float>* directOscModEnvSemitones = nullptr;
-        std::atomic<float>* directPulseKeytrack = nullptr;
-        std::atomic<float>* directPulseLfo = nullptr;
-        std::atomic<float>* directPulseModEnv = nullptr;
-        std::atomic<float>* fxEnabled = nullptr;
         std::atomic<float>* fxSaturationEnabled = nullptr;
         std::atomic<float>* fxDistortionMode = nullptr;
         std::atomic<float>* fxSaturationMix = nullptr;
@@ -306,13 +315,99 @@ private:
         std::atomic<float>* fxCompressorRatio = nullptr;
         std::atomic<float>* fxCompressorMakeupDb = nullptr;
         std::atomic<float>* fxCompressorMix = nullptr;
-        std::atomic<float>* qualityRealtimeMode = nullptr;
-        std::atomic<float>* qualityOfflineMode = nullptr;
         std::array<RawTransModSlot, synth::transModSlotCount> transMod {};
         std::atomic<float>* macroMotion = nullptr;
         std::atomic<float>* macroWidth = nullptr;
         std::atomic<float>* macroDrive = nullptr;
         std::atomic<float>* macroSpace = nullptr;
+    };
+
+    struct RawNativeParameters
+    {
+        std::atomic<float>* phaserSyncDivision = nullptr;
+        std::atomic<float>* chorusSyncDivision = nullptr;
+        std::atomic<float>* warmDrive = nullptr;
+        std::atomic<float>* portamentoMode = nullptr;
+        std::atomic<float>* sync = nullptr;
+        std::atomic<float>* pitchBendRange = nullptr;
+        std::atomic<float>* masterLevel = nullptr;
+        std::atomic<float>* filterControlCutoffSemitones = nullptr;
+        std::atomic<float>* filterControlResonance = nullptr;
+        std::atomic<float>* filterControlKeytrack = nullptr;
+        std::atomic<float>* filterControlDrive = nullptr;
+        std::atomic<float>* layer0FilterEnabled = nullptr;
+        std::atomic<float>* layer0FilterMode = nullptr;
+        std::atomic<float>* layer0FilterCutoffsemitones = nullptr;
+        std::atomic<float>* layer0FilterResonance = nullptr;
+        std::atomic<float>* layer0FilterDrive = nullptr;
+        std::atomic<float>* layer0FilterKeytrack = nullptr;
+        std::atomic<float>* layer0FilterOversampling = nullptr;
+        std::atomic<float>* layer0FilterInput = nullptr;
+        std::atomic<float>* layer0AmpAttackms = nullptr;
+        std::atomic<float>* layer0AmpDecayms = nullptr;
+        std::atomic<float>* layer0AmpSustain = nullptr;
+        std::atomic<float>* layer0AmpReleasems = nullptr;
+        std::atomic<float>* layer1FilterEnabled = nullptr;
+        std::atomic<float>* layer1FilterMode = nullptr;
+        std::atomic<float>* layer1FilterCutoffsemitones = nullptr;
+        std::atomic<float>* layer1FilterResonance = nullptr;
+        std::atomic<float>* layer1FilterDrive = nullptr;
+        std::atomic<float>* layer1FilterKeytrack = nullptr;
+        std::atomic<float>* layer1FilterOversampling = nullptr;
+        std::atomic<float>* layer1FilterInput = nullptr;
+        std::atomic<float>* layer1AmpAttackms = nullptr;
+        std::atomic<float>* layer1AmpDecayms = nullptr;
+        std::atomic<float>* layer1AmpSustain = nullptr;
+        std::atomic<float>* layer1AmpReleasems = nullptr;
+        std::atomic<float>* modEnv2Attackms = nullptr;
+        std::atomic<float>* modEnv2Decayms = nullptr;
+        std::atomic<float>* modEnv2Sustain = nullptr;
+        std::atomic<float>* modEnv2Releasems = nullptr;
+        std::atomic<float>* lfo0Gain = nullptr;
+        std::atomic<float>* lfo0Offset = nullptr;
+        std::atomic<float>* lfo0Free = nullptr;
+        std::atomic<float>* lfo1Shape = nullptr;
+        std::atomic<float>* lfo1Ratehz = nullptr;
+        std::atomic<float>* lfo1Syncdivision = nullptr;
+        std::atomic<float>* lfo1Phasedegrees = nullptr;
+        std::atomic<float>* lfo1Gatemode = nullptr;
+        std::atomic<float>* lfo1Mono = nullptr;
+        std::atomic<float>* lfo1Stepcount = nullptr;
+        std::atomic<float>* lfo1Stepsmooth = nullptr;
+        std::atomic<float>* lfo1Gain = nullptr;
+        std::atomic<float>* lfo1Offset = nullptr;
+        std::atomic<float>* lfo1Free = nullptr;
+        std::atomic<float>* fxPhasercenterhz = nullptr;
+        std::atomic<float>* fxPhaserspread = nullptr;
+        std::atomic<float>* fxPhaserlroffset = nullptr;
+        std::atomic<float>* fxPhaserwidth = nullptr;
+        std::atomic<float>* fxChorusdelayms = nullptr;
+        std::atomic<float>* fxChorusfeedback = nullptr;
+        std::atomic<float>* fxChorusdualmode = nullptr;
+        std::atomic<float>* fxChoruswidth = nullptr;
+        std::atomic<float>* fxEqlowfrequencyhz = nullptr;
+        std::atomic<float>* fxEqhighfrequencyhz = nullptr;
+        std::atomic<float>* fxDelaytimeleftms = nullptr;
+        std::atomic<float>* fxDelaytimerightms = nullptr;
+        std::atomic<float>* fxDelayrightsyncdivision = nullptr;
+        std::atomic<float>* fxDelaypingpong = nullptr;
+        std::atomic<float>* fxDelayspread = nullptr;
+        std::atomic<float>* fxDelaywidth = nullptr;
+        std::atomic<float>* fxDelaylowcuthz = nullptr;
+        std::atomic<float>* fxDelayhighcuthz = nullptr;
+        std::atomic<float>* fxDelaysmear = nullptr;
+        std::atomic<float>* fxReverbpredelayms = nullptr;
+        std::atomic<float>* fxReverbdamp = nullptr;
+        std::atomic<float>* fxReverbwidth = nullptr;
+        std::atomic<float>* fxCompressorattackms = nullptr;
+        std::atomic<float>* fxCompressorreleasems = nullptr;
+        std::atomic<float>* arpVelocitymode = nullptr;
+        std::atomic<float>* arpWrap = nullptr;
+        std::atomic<float>* arpTimems = nullptr;
+        std::array<std::atomic<float>*, synth::lfoStepSlotCount> lfo2Steps {};
+        std::array<std::array<std::atomic<float>*, synth::nativeModDestinationCount>, synth::transModSlotCount> depths {};
+        std::array<std::array<std::atomic<float>*, 2>, synth::transModSlotCount> destinations {};
+        std::array<std::array<std::atomic<float>*, 2>, synth::transModSlotCount> amounts {};
     };
 
     void cacheParameterPointers();
@@ -334,14 +429,14 @@ private:
                                       const juce::String& parameterId,
                                       juce::String& message,
                                       bool persist);
-    bool applyModulationRouteParameterEdits(const std::vector<synth::ModulationRouteParameterEdit>& edits,
-                                            juce::String& message);
+    bool applyModulationRouteParameterEdits(const std::vector<synth::ModulationRouteParameterEdit>& edits, juce::String& message);
     bool applyPreparedPresetState(const juce::ValueTree& state,
                                   const synth::PresetStateFingerprint& baselineFingerprint,
                                   const juce::String& status,
                                   const juce::String& presetName,
                                   const juce::String& presetFilePath,
-                                  juce::String& message);
+                                  juce::String& message,
+                                  bool updateProgramBaseline = true);
     int parameterIndexForId(const juce::String& parameterId) const;
     void applyPendingMidiLearns();
     void applyPendingMappedControllers();
@@ -354,6 +449,7 @@ private:
     synth::SynthEngine engine;
     const synth::SynthParameters parameterDefaults {};
     RawParameterPointers raw;
+    RawNativeParameters nativeRaw;
     std::array<std::atomic<int>, 128> midiControllerParameterIndices {};
     std::array<PendingMidiControllerValue, 128> pendingMidiControllerValues {};
     std::array<std::uint32_t, 128> appliedMidiControllerSequences {};
@@ -372,6 +468,8 @@ private:
     std::atomic<int> diagnosticMidiEvents { 0 };
     std::atomic<int> diagnosticInvalidSamples { 0 };
     std::atomic<float> diagnosticPeak { 0.0f };
+    std::atomic<float> diagnosticPeakLeft { 0.0f };
+    std::atomic<float> diagnosticPeakRight { 0.0f };
     std::atomic<float> diagnosticTempoBpm { 128.0f };
     std::atomic<bool> panicRequested { false };
     std::array<std::atomic<float>, scopeCapacity> scopeSamples {};
@@ -379,6 +477,8 @@ private:
     std::atomic<bool> uiLfoVoiceActive { false };
     std::atomic<float> uiLfoPhase { 0.0f };
     std::atomic<float> uiLfoValue { 0.0f };
+    std::atomic<float> uiPitchBend { 0.0f };
+    std::atomic<float> uiModWheel { 0.0f };
     int tailDrainSamplesRemaining = 0;
     std::atomic<std::uint64_t> parameterStateSequence { 0 };
     std::atomic<std::uint64_t> presetParameterRevision { 1 };

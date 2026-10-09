@@ -67,7 +67,7 @@ int clampIntFast(int value, int minimum, int maximum) noexcept
 
 void OscillatorStack::prepare(double newSampleRate) noexcept
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
     cachedBaseFrequencyValid = false;
     reset(0.0f);
 }
@@ -94,6 +94,87 @@ void OscillatorStack::resetState(float basePhase) noexcept
     cachedBaseFrequencyValid = false;
     cachedDetunedIncrementStackCount = -1;
     cachedDetunedMasterIncrement = -1.0f;
+}
+
+void OscillatorStack::resetNativePhase(float normalizedPhase) noexcept
+{
+    resetState(wrapUnit(std::isfinite(normalizedPhase) ? normalizedPhase : 0.0f));
+    phases.fill(wrapUnit(std::isfinite(normalizedPhase) ? normalizedPhase : 0.0f));
+}
+
+OscillatorStack::StereoSample OscillatorStack::renderNative(float midiNote,
+                                                            const LayerOscillatorParameters& parameters, float pitchModSemitones, float phaseModDegrees) noexcept
+{
+    StereoSample output;
+    const auto count = clampIntFast(parameters.voices, 0, maxStackCount);
+    if (count == 0)
+        return output;
+
+    const auto rate = static_cast<float>(sampleRate);
+    const auto note = midiNote + static_cast<float>(parameters.octave * 12 + parameters.note)
+        + parameters.fineCents * 0.01f + pitchModSemitones;
+    const auto frequency = clampFast(midiNoteToHz(note), 1.0f, rate * 0.45f);
+    const auto detune = clampUnitFast(parameters.detune);
+    updateDetuneRatios(count, detune);
+    const auto gain = 0.7f * clampFast(parameters.level, 0.0f, 4.0f) * inverseSqrtForCount(count);
+    const auto spread = clampUnitFast(parameters.stereo);
+    const auto phaseOffset = clampFast(phaseModDegrees, -720.0f, 720.0f) / 360.0f;
+    if (cachedNativePanCount != count || cachedNativePan != parameters.pan || cachedNativeStereo != spread)
+    {
+        cachedNativePanCount = count;
+        cachedNativePan = parameters.pan;
+        cachedNativeStereo = spread;
+        for (int index = 0; index < count; ++index)
+        {
+            const auto voicePan = count > 1
+                ? (2.0f * static_cast<float>(index) / static_cast<float>(count - 1) - 1.0f) * spread
+                : 0.0f;
+            const auto pan = clampFast(parameters.pan + voicePan, -1.0f, 1.0f);
+            const auto angle = (pan + 1.0f) * pi * 0.25f;
+            nativePanLeft[static_cast<std::size_t>(index)] = pan >= 1.0f ? 0.0f : std::cos(angle);
+            nativePanRight[static_cast<std::size_t>(index)] = pan <= -1.0f ? 0.0f : std::sin(angle);
+        }
+    }
+    for (int index = 0; index < count; ++index)
+    {
+        auto& storedPhase = phases[static_cast<std::size_t>(index)];
+        auto phase = phaseOffset == 0.0f ? storedPhase : wrapUnit(storedPhase + phaseOffset);
+        const auto increment = clampFast(frequency / rate * detuneRatios[static_cast<std::size_t>(index)],
+                                         1.0f / rate, 0.45f);
+        const auto triangle = [increment](float position) noexcept {
+            const auto correction = [increment](float value) noexcept {
+                if (value >= 1.0f) value -= 1.0f;
+                const auto distance = std::min(value, 1.0f - value);
+                if (distance >= increment)
+                    return 0.0f;
+                const auto remainder = 1.0f - distance / increment;
+                return increment * remainder * remainder * remainder / 3.0f;
+            };
+            return 1.0f - 4.0f * std::abs(position - 0.5f)
+                + 4.0f * correction(position) - 4.0f * correction(position + 0.5f);
+        };
+        auto value = 0.0f;
+        switch (parameters.waveform)
+        {
+            case OscillatorSlotWaveform::Saw: value = renderSaw(phase, increment); break;
+            case OscillatorSlotWaveform::Pulse: value = renderPulse(phase, increment, 0.5f); break;
+            case OscillatorSlotWaveform::HalfPulse: value = renderPulse(phase, increment, 0.25f) + 0.5f; break;
+            case OscillatorSlotWaveform::QuarterPulse: value = renderPulse(phase, increment, 0.125f) + 0.75f; break;
+            case OscillatorSlotWaveform::Noise: value = renderNoise(); break;
+            case OscillatorSlotWaveform::Sine: value = std::sin(2.0f * pi * phase); break;
+            case OscillatorSlotWaveform::Triangle: value = triangle(phase); break;
+            case OscillatorSlotWaveform::SawTriangle:
+                value = 0.5f * (renderSaw(phase, increment) + triangle(phase));
+                break;
+        }
+        advancePhase(storedPhase, increment);
+        const auto sample = value * gain * (parameters.invert ? -1.0f : 1.0f);
+        output.left += sample * nativePanLeft[static_cast<std::size_t>(index)];
+        output.right += sample * nativePanRight[static_cast<std::size_t>(index)];
+    }
+    output.left = std::isfinite(output.left) ? output.left : 0.0f;
+    output.right = std::isfinite(output.right) ? output.right : 0.0f;
+    return output;
 }
 
 float OscillatorStack::renderSample(float midiNote, const SynthParameters& parameters,

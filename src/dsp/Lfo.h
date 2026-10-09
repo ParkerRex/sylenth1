@@ -12,7 +12,8 @@ enum class LfoShape
     SawDown,
     Square,
     SampleHold,
-    Step
+    Step,
+    Noise
 };
 
 inline constexpr int lfoMaxSteps = 16;
@@ -29,6 +30,7 @@ public:
     // step values never resets phase, so live tweaks stay click-free.
     void setSteps(const float* stepValues, int count, float smooth) noexcept;
     void resetPhase() noexcept;
+    void setNormalizedPhase(float normalizedPhase) noexcept;
     float process() noexcept;
 
     float getValue() const noexcept { return value; }
@@ -43,6 +45,7 @@ private:
     float phaseIncrement = 2.0f / 44100.0f;
     float phase = 0.0f;
     float phaseOffset = 0.0f;
+    float cachedPhaseDegrees = 0.0f;
     float value = 0.0f;
     float heldRandom = 0.0f;
     unsigned int randomState = 0x12345678u;

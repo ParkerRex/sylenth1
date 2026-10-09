@@ -1,6 +1,6 @@
 # synthia Context
 
-synthia is a lab-built macOS/Ableton software instrument. Phase 1 rebuilds the Sylenth1 vintage VST experience for today's AU/VST3 hosts. Phase 2 adds AI-assisted sound and arpeggio generation. Phase 3 adds conversational VST control and reference-sound recreation.
+synthia is a macOS/Ableton software instrument. The active release recreates the classic Sylenth1 interface and behavior for AU/VST3 hosts. The 2026-10-09 contract at the start of `SPEC.md` takes precedence over earlier modernized UI directions. AI generation, conversational editing, and the separate browser/Wasm initiative are deferred.
 
 ## Core Vocabulary
 
@@ -32,10 +32,12 @@ The main product thesis:
 
 The implementation posture:
 
-- Preserve the working dry core while Phase 1 grows toward the full Sylenth-level architecture.
+- Reuse sound primitives where useful while completing the full classic architecture; old Synthia patch compatibility is explicitly out of scope.
 - Validate every sound-path change with deterministic tests and Ableton host proof.
 - Keep AI-generated output inspectable, reversible, and represented as ordinary synth/preset state.
-- Keep UI production-oriented and fast rather than nostalgic for its own sake.
+- Match the selected classic reference precisely. Do not replace the primary interface with a modern reinterpretation.
+- Keep visual, behavioral, audio, persistence, and public-distribution evidence distinct. Passing self-render tests does not establish original-plugin equivalence.
+- Use one native signal path and current preset/state contract, without a legacy profile or conversion UI.
 
 ## Decision Lanes
 

@@ -2,15 +2,176 @@
 
 Validation must prove the instrument behaves correctly as a plugin and as a sound engine. Passing unit tests alone is not enough; Ableton loading, host state, and audio renders are required.
 
-## Roadmap Validation Phases
+## Native Rebuild Acceptance
 
-Phase 1 validation proves the Sylenth rebuild: AU/VST3 scan/load/play in Ableton, host state restore, automation, preset browsing, A/B architecture, oscillator/filter/envelope/modulation behavior, arpeggiator timing, FX tails, UI open/close while playing, and screenshot/manual QA against `docs/modern-synthia-baseline.md`.
+The rebuild uses one native architecture. Its behavior checks prove the local
+implementation responds to its controls. They do
+not prove a Sylenth audio match or a pixel match.
 
-Phase 2 validation proves AI-assisted generation: randomize/generate commands must produce finite audio, valid preset state, bounded parameter values, deterministic or intentionally seeded results, and editable arp/chord/modulation data rather than opaque output.
+`SynthiaDspCoreTest` includes these native cases:
 
-Phase 3 validation proves conversational editing: text prompts and reference-sound workflows must produce reversible parameter diffs, preserve realtime safety, avoid invalid states, and include reports that explain which synth, modulation, arp, and FX controls changed.
+- A1 octave changes the measured sine frequency by 12 semitones within 5 cents;
+  waveform changes affect audio; zero voices silence the oscillator; eight
+  detuned voices change the render.
+- Stereo spread produces different left and right waveforms, with zero spread
+  producing equal channels.
+- Hard-panned A/B parts preserve A's samples when only B's filter or amp
+  envelope changes. Filter input None silences its output while B oscillators
+  can still feed Filter A through crossrouting.
+- The second modulation envelope and LFO change the audible A1 pitch through
+  native destinations. Changing the first source does not change that route;
+  disabling the route restores the deterministic baseline.
+- Arp Up, Down, UpDown, DownUp, both endpoint-repeat modes and AsPlayed produce
+  specified note sequences. Wrap resets melodic position. Random is repeatable.
+  StepSequence uses step transpose; ordinary melodic modes ignore it.
+- Triplet and dotted arp divisions are checked against their rounded sample
+  durations. Tied steps preserve common notes, order the new note before the
+  old release, and release at rests.
+- Five velocity modes produce the specified event velocities. StepChord emits
+  matching note-offs for all generated chord notes. Step velocity reaches the
+  native modulation path and clearing its route restores baseline audio.
+- Fully wet delay has no immediate dry impulse, uses independent left/right
+  sample timings, collapses to equal channels at zero width, and bypasses
+  exactly. Reverb respects predelay, mono width and a longer declared tail.
+- Compressor attack and release settings produce different transient and
+  recovery behavior. Phaser/chorus Sync matches the equivalent free rate through
+  a tempo change without resetting phase. Zero visible FX mixes remain dry even
+  with hidden macro values; fixed distortion Amount remains independent of
+  macro drive.
+- Shared resonance modulation changes both A/B filter paths. Global phaser
+  modulation selects the most recently triggered active voice through its
+  release, then falls back; multiple voices do not attenuate its depth. Scalar
+  and block processing preserve the typed control and audio samples. Part/master
+  volume endpoints reach exact silence and restore a held note when raised.
+- Normal portamento glides with overlapping keys and retriggers the mono ramp;
+  it jumps between separated keys. Slide glides between separated keys.
+- A rack render matches independently composed modules in the documented order:
+  Distortion, Phaser, Chorus, EQ, Reverb, Delay, Compressor.
 
-Current scaffold commands:
+`SynthiaContractTest` checks native APVTS round-trip, independent B filter/amp
+and second envelope/LFO values, and a selected route with zero amount. Native
+preset preparation and host state preserve the current parameter values. XML
+round-trip checks protect numeric values represented as strings by JUCE.
+
+`SynthiaNativeProcessorTest` uses the real processor to check 512 program slots,
+sub-bank boundaries, copy/paste, insertion/deletion, invalid indices, program values/names across
+host-state restore, bank-file persistence, rejection of malformed banks without changing the selected
+program, and create-only no-clobber behavior.
+It also submits UI MIDI to the fixed queue, proves note-on renders audio,
+note-off releases it, rejects queue overflow and accepts events after draining. A note-off rejected
+because the queue is full must trigger the processor panic handoff and leave
+no active voice. Pitch/mod wheel updates coalesce while the FIFO is full; their
+final center/zero values must still reach the audio processor.
+Reset is checked against the stored original after its file is changed or
+deleted. Host restore must preserve edited values and the original dirty
+baseline, and Reset must return to that original state.
+
+It checks that closing the native editor preserves a held DAW note, and that a
+six-second free-running arp interval keeps scheduling after all voices are
+silent. FREE LFO clocks are compared after equal audio callback time with and
+without active notes. Silent rate edits must preserve phase and change its
+slope. Both LFOs produce a different next-note render with FREE on after a
+silent gap; ordinary note-reset mode returns identical audio. This measures
+delivered audio callbacks, and does not force a host to process a suspended
+plugin. This covers the processor handoff; manual keyboard mouse interaction still
+requires native UI/host proof.
+
+The core render suite writes `native-preset-loading-contract.json`, which loads
+a native preset through the normal preset preparation path and measures the
+sine pitch after A1 octave and a selected modulation destination are applied.
+The renderer loads independent filters/envelopes, both LFOs, native destinations,
+selected routes and expanded FX controls from that same prepared state.
+
+`native-global-routing.json` compiles a phaser center route through the actual
+write adapter, loads the parameter state, checks an audible wet-render change,
+preserves the visible base frequency and restores the deterministic baseline
+after clearing the route.
+
+The core render suite also writes `wet-difference-contract.json`. Audible distortion
+with delay and reverb disabled must pass. The same rendered audio with zero
+declared tail metadata must also pass the audibility check. Identical samples with a claimed
+tail and disabled effects must fail the meaningful wet-difference contract.
+The existing max/RMS difference thresholds remain unchanged. A time-based FX
+tail is checked separately where the patch actually enables delay or reverb.
+
+These checks must pass on the integrated build before packaging. Earlier
+Ableton evidence records earlier binaries. Fresh AU/VST3 scan, playback,
+automation, save/reopen, offline/realtime, buffer/sample-rate and UI checks are
+still required for this rebuild.
+
+## Original Reference Evidence
+
+Original Sylenth recordings and original lossless captures are not available in
+this worktree. `tests/references/sylenth-reference-manifest.json` records that
+absence explicitly. No local synthia render is used as a Sylenth golden, and
+passing patch-recreation renders does not establish external fidelity.
+
+The checked-in reference manifest is an acquisition checklist, not a passing
+fixture. Populate every required case with an original-plugin capture and its
+provenance before evaluating fidelity. Preserve the original version, host,
+patch settings, fixed MIDI input, sample rate, buffer size and tempo. Reference
+paths are relative to the manifest directory. Each original requires its
+SHA-256, `product: Sylenth1`, `capture_origin: original_plugin` and `captured_by`.
+Audio cases require explicit approved max-absolute and RMS difference limits
+with an approver and reason. No audio tolerance is inferred from local tests.
+
+```bash
+python3 scripts/compare-reference-audio.py \
+  --manifest tests/references/sylenth-reference-manifest.json \
+  --output build/reports/reference/audio.json
+python3 scripts/compare-reference-images.py \
+  --manifest tests/references/sylenth-reference-manifest.json \
+  --output-dir build/reports/reference/images
+python3 tests/tools/ReferenceComparisonTest.py
+```
+
+Both reference commands currently return exit status 1 and write per-case
+missing-reference errors. Missing files, provenance, hashes, capture settings
+or audio limit approval also fail. Self-tests use small synthetic files solely
+to validate comparison behavior; they are not reference evidence.
+
+Audio comparison accepts uncompressed integer PCM WAV, requires identical
+sample rate/channel count/frame count, and records per-channel correlation,
+RMS and maximum sample differences. It never aligns, trims, resamples or gain
+matches. Exact timing and amplitude remain observable. Reference capture must
+include release and effects tails; comparing a shortened file fails.
+
+Visual comparison accepts non-interlaced 8-bit RGBA PNG at identical resolution.
+Convert other lossless source formats explicitly without resizing before
+comparison, while retaining the source capture and documenting conversion.
+There is no visual tolerance. All RGBA channels are compared, including alpha.
+Only an explicitly approved branding rectangle may be excluded: each mask
+requires integer `x`, `y`, `width`, `height`, `purpose: branding`, `approved_by`
+and `reason`. There are no masks in the checked-in manifest. A mask that
+excludes the whole image fails. Controls, panels and spacing must remain in the
+comparison.
+
+Reference and candidate must be independent files. Same paths, symlinks and
+hardlinks to the same file fail. Report and difference-image destinations must
+not alias any capture or the manifest. Musical audio captures must be non-silent;
+a deliberately silent case requires `silence_approval` with an approver and
+reason.
+
+Image reports include changed/compared/masked pixel counts, changed fraction,
+maximum/mean/RMS channel differences, both file hashes and the approved mask
+list. A difference PNG is written for each comparable case; blue pixels mark
+excluded branding. Resolution mismatch or any unmasked pixel difference fails
+with exit status 1. These metrics expose differences; they do not certify
+perceptual or interaction equivalence.
+
+`SynthiaReferenceComparisonTest` exercises exact matches, one-channel and alpha
+changes, timing changes, frame/sample-rate/resolution mismatch, approved mask
+boundaries, invalid masks, aliases, capture overwrite protection, silent audio and
+missing-reference command failures. It uses only
+Python's standard library.
+
+## Native Validation Commands
+
+Browser/Wasm, AI generation and conversational editing are deferred. The current
+acceptance contract is `SPEC.md` and `CLASSIC_PARITY.md`. Original-product fidelity,
+local behavior, current host execution and distribution proof remain separate.
+
+Current commands:
 
 ```bash
 cmake -S . -B build -DSYNTHIA_ENABLE_TESTS=ON
@@ -37,17 +198,16 @@ The current smoke render is intentionally note-less and proves initialization, f
 
 The current contract validation proves:
 
-- 346 unique parameter IDs,
+- unique parameter IDs (the current inventory is reported by `--list-parameters`),
 - valid defaults and ranges,
 - APVTS state round-trip,
-- old host-state default merge for new layer, oscillator-slot, arp, step, and chord fields,
-- layer and oscillator-slot defaults, arp/chord defaults, legacy preset defaulting, saved preset serialization, inactive-slot no-op behavior, audible A2/B1/B2 rendering, and layer mute/solo behavior,
-- seven factory preset JSON files, including six curated Phase 1 patch-recreation cases,
+- layer and oscillator-slot defaults, arp/chord defaults, saved preset serialization, inactive-slot no-op behavior, audible A2/B1/B2 rendering, and layer mute/solo behavior,
+- factory preset files and six curated Phase 1 patch-recreation render cases,
 - no unknown preset parameter IDs,
 - TransMod slot objects use valid slot IDs, source/scaler choices, depth domains, and destination IDs.
 - Init, Reset, and seedable Randomize commands prepare ordinary APVTS state without mutating live state before replacement.
 - Preset workflow helpers cover metadata-aware writes, no-clobber create-only safe-save rejection, dirty-state comparison against immutable baseline fingerprints, and local A/B compare slot capture/recall without mutating live state before replacement.
-- Standalone UI smoke covers the preset workflow and metadata-save controls at normal and compact sizes: dirty-state pill, Init, Random, Reset, A Store/A Load, B Store/B Load, Preset name, Author, Bank, Category, Tags, Notes, Save New, Overwrite, and the adjacent preset browser/MIDI panels. The A Store manual control smoke confirms A Load becomes actionable after capture. Invalid-preset browser rows are model-backed in the editor and require manual browser-bottom QA until JUCE viewport scrolling is reliable under automation.
+- The classic editor has deterministic captures for all eight LCD pages, Part A/B and 2x scale. Adjacent binding reports check every visible control against the registry and APVTS. These captures do not establish pixel identity with the original; mouse interaction and host lifecycle are separate checks.
 - MIDI controller-map normalization rejects invalid assignments, resolves CC/parameter conflicts deterministically, and round-trips through the global user sidecar JSON shape.
 
 The current voice-core validation proves:
@@ -74,27 +234,29 @@ The current DSP validation proves:
 - direct chord expansion, overlapping chord-output release ownership, chord parameter-change note-off symmetry, arp up-mode timing, host-tempo step duration, gate-off timing, octave wrapping, step pitch and velocity scaling, tie/hold behavior, arp enable/disable while input notes are held, hold-disable latch clearing, and panic clearing generated notes.
 - voice-mode and polyphony cap changes keep the most recent held notes and drain surplus voices through a bounded de-click fade instead of hard-resetting them.
 - top-level `mod_slots` preset schema objects are applied by render loading, including schema-only modulation fixtures that omit flat APVTS-style `transmod.*` parameters.
-- modulation route model catalogs and derived route rows are covered by `SynthiaContractTest`, including source/scaler IDs, destination IDs, active route filtering, and legacy `transmod.N.depth` cutoff contribution.
-- `SynthiaRender --modulation-route-render-test` compiles a route write through `ModulationRouteModel`, applies it to `transmod.3.*`, proves the rendered audio changes, then applies a clear-slot edit and proves the render returns to baseline within deterministic tolerances.
-- preset browser metadata validation, saved user preset browser metadata, factory/user/legacy source summaries, sidecar favorite add/remove behavior, search/category/tag/favorite filtering, and browser catalog facets are covered by `SynthiaContractTest`.
-- APVTS automation-readiness is covered by `SynthiaContractTest`: every registry parameter must be exposed by APVTS, remain host-automatable when marked automatable, match its declared float/bool/choice type, and accept host-notifying default writes. Ableton AU/VST3 automation record/playback is covered by the 2026-06-07 host proof in `docs/host-validation/ableton-smoke.md`.
-- MIDI controller-map persistence is covered by `SynthiaContractTest`; learned CC capture, persistence, value application, and Forget behavior in AU and VST3 are covered by the current Ableton host proof in `docs/host-validation/ableton-smoke.md`.
+- modulation route model catalogs and derived route rows are covered by `SynthiaContractTest`, including source/scaler IDs, destination IDs, active route filtering, and normalized `transmod.N.depth` cutoff contribution.
+- `SynthiaRender --modulation-route-render-test` compiles a route write through `ModulationRouteModel`, applies it to the unused `transmod.8.*` slot, proves the rendered audio changes, then applies a clear-slot edit and proves the render returns to baseline within deterministic tolerances.
+- preset browser metadata validation, saved user preset browser metadata, factory/user source summaries, sidecar favorite add/remove behavior, search/category/tag/favorite filtering, and browser catalog facets are covered by `SynthiaContractTest`.
+- APVTS automation-readiness is covered by `SynthiaContractTest`: every registry parameter must be exposed by APVTS, remain host-automatable when marked automatable, match its declared float/bool/choice type, and accept host-notifying default writes. The 2026-06-07 automation record is historical; this candidate needs its own AU/VST3 host proof.
+- MIDI controller-map persistence is covered by `SynthiaContractTest`; learned CC capture, persistence, value application, and Forget behavior in AU and VST3 are described in historical Ableton records; current-candidate host proof is tracked separately.
 - FX bypass stays null-equivalent to dry rendering when globally bypassed, disabled expanded-rack modules are dry-equivalent, phaser/EQ/compressor/distortion-mode processing is finite and measurably audible when enabled, tempo-synced delay reports exact sample timing at test tempo, FX tail length is reported from the active time-based FX parameters, and wet output remains finite, non-clipping, and measurably different from its dry reference.
-- `SynthiaRender --offline-realtime-compare-test` renders `FX Space 01` in realtime Normal quality and offline High quality, verifies both renders are finite and non-clipping, and records a bounded meaningful audio difference caused by the quality-mode switch. Ableton offline bounce versus realtime resampling is covered by the 2026-06-07 host proof in `docs/host-validation/ableton-smoke.md` and the stronger `scripts/compare-ableton-bounce-realtime.py` content-match report.
+- `SynthiaRender --offline-realtime-compare-test` renders the same native `FX Space 01` state with 64- and 512-sample processing blocks, splits blocks at exact MIDI event samples, checks finite non-clipping output, and requires deterministic waveform equivalence. This is a standalone processing-boundary check. Fresh Ableton offline bounce versus realtime resampling remains separate; the 2026-06-07 host proof in `docs/host-validation/ableton-smoke.md` records an earlier binary.
 - `SynthiaRender --randomize-test` prepares seedable bounded randomized APVTS state through `PresetManager`, renders each seed through the standalone engine as prepared, rejects malformed seed lists, and checks finite non-silent non-clipping output.
 - `SynthiaRender --suite core` runs the standalone smoke, parameter, preset, voice, oscillator, filter, modulation, modulation route render, offline/realtime compare, randomize render, dry pluck, wet pluck, LFO ablation, and determinism reports in one command.
-- `SynthiaRender --suite patch-recreation` renders `Pluck Core 01`, `Supersaw Stack 01`, `Bass Wub 01`, `Pad Wide 01`, `Arp Motion 01`, and `FX Space 01` against the overlap-pluck fixture, writes WAV/report artifacts for each, and checks finite non-clipping output plus meaningful wet-versus-dry FX differences. The arp/chord patch also asserts that `SynthRender` applies preset-loaded `arp.*` and `chord.*` state.
+- `SynthiaRender --suite patch-recreation` renders `Pluck Core 01`, `Supersaw Stack 01`, `Bass Wub 01`, `Pad Wide 01`, `Arp Motion 01`, and `FX Space 01`, writes WAV/report artifacts for each, and checks finite non-clipping output plus meaningful wet-versus-dry FX differences. The pad uses `fixtures/midi/held-pad-triad.mid`, a staggered sustained triad lasting 3.75 seconds, so its slow envelopes reach a useful level. Other patches use the overlap-pluck fixture. An explicitly supplied non-default fixture is used for all patches. Per-patch reports record the actual fixture. The arp/chord patch also asserts that `SynthRender` applies preset-loaded `arp.*` and `chord.*` state.
 - `SynthiaRenderCoreSuite` runs the core suite under CTest.
 - `SynthiaRandomizeRenderTest` runs the randomized preset render proof under CTest.
 - `SynthiaModulationRouteRenderTest` runs the modulation route write/render/clear proof under CTest.
-- `SynthiaOfflineRealtimeCompareTest` runs the standalone realtime/offline quality-mode comparison under CTest.
+- `SynthiaOfflineRealtimeCompareTest` runs the standalone same-state processing-block comparison under CTest.
 - `SynthiaPatchRecreationSuite` runs the patch-recreation suite under CTest.
 
 Preset render validation is expected to fail if the preset file is missing, the `.SynthiaPreset` envelope or nested preset payload is invalid, the MIDI fixture is missing, the fixture is not a valid MIDI file, or the fixture has no note events.
 
 ## Validation Profiles
 
-### Core DSP
+### DSP Primitive Checks
+
+The low-level test library includes additional oscillator/filter primitives that are not public classic controls. Their tests do not imply those controls are exposed by the editor.
 
 - oscillator aliasing,
 - pulse duty cycle,
@@ -130,10 +292,10 @@ Current standalone core-suite artifacts:
 
 - `summary.json`: aggregate pass/fail for all core reports.
 - `pluck-core-01-dry.json`: dry factory pluck metrics plus WAV artifact path.
-- `pluck-core-01-wet.json`: wet factory pluck metrics plus WAV artifact path, FX mode, delay division, tempo-synced delay samples, tail length, post-event render length, active quality mode, and wet-versus-dry difference metrics.
+- `pluck-core-01-wet.json`: wet factory pluck metrics plus WAV artifact path, FX mode, delay division, tempo-synced delay samples, tail length, post-event render length, and wet-versus-dry difference metrics.
 - `randomize.json`: seed list, per-seed prepared/rendered status, prepared FX-enabled state, peak, RMS, nonzero sample count, invalid sample count, and pass/fail for bounded randomized state render proof.
 - `modulation-route-render.json`: route write edits, clear-slot edits, active route count, baseline/routed/cleared peak and RMS, routed audio-difference thresholds, clear-to-baseline tolerances, and pass/fail for route creation plus clear-slot restore.
-- `offline-realtime-compare.json`: realtime/offline quality modes, peak/RMS metrics for each render, audio-difference metrics, and pass/fail for bounded meaningful quality-mode difference.
+- `offline-realtime-compare.json`: 64/512-sample block sizes, both render peaks, max/RMS waveform differences, explicit deterministic tolerances and `same_state_equivalent` pass/fail (report schema 2).
 - `lfo-ablation.json`: compares per-voice LFO and mono LFO renders using note-local LFO spread and audio difference.
 - `determinism.json`: renders the dry pluck twice and compares `max_abs_diff`, `rms_diff`, and `peak_delta` against fixed tolerances.
 - `artifacts/*.wav`: retained dry/per-voice/mono render WAVs.
@@ -142,7 +304,7 @@ Current standalone core-suite artifacts:
 Current patch-recreation-suite artifacts:
 
 - `summary.json`: aggregate pass/fail for the curated Phase 1 patch set.
-- `<preset-id>-wet.json`: per-preset render metrics, FX mode, quality mode, note-local LFO spread where applicable, and wet-versus-dry difference metrics.
+- `<preset-id>-wet.json`: per-preset render metrics, FX mode, note-local LFO spread where applicable, and wet-versus-dry difference metrics.
 - `summary.json` patch rows include `arp_chord_state_passed`; this must be `true` for `Arp Motion 01`.
 - `artifacts/<preset-id>-wet.wav`: retained render WAVs for listening and regression inspection.
 
@@ -159,9 +321,9 @@ Required Ableton checks:
 - sample-rate changes,
 - transport stop and all-notes-off,
 - UI open/close while playing.
-- MIDI Learn and Forget from the global controller panel, plus mapped CC playback against at least one continuous and one stepped parameter.
+- MIDI Learn and Forget from per-control context menus, plus mapped CC playback against at least one continuous and one stepped parameter.
 
-Current Ableton proof includes AU/VST3 `Layer A Level` automation record/playback plus Master offline bounce versus realtime resampling content comparison with envelope alignment, per-channel filtered-band correlation thresholds, and negative controls. Strict waveform/null-test equivalence is not claimed.
+Historical Ableton proof includes AU/VST3 `Layer A Level` automation record/playback plus Master offline bounce versus realtime resampling content comparison with envelope alignment, per-channel filtered-band correlation thresholds, and negative controls. Strict waveform/null-test equivalence is not claimed.
 
 Recommended additional hosts:
 
@@ -204,10 +366,10 @@ Implemented standalone metrics:
 - `spectral_centroid_hz`: bounded-window DFT centroid for coarse spectral regression.
 - `stereo_correlation`: left/right correlation, useful for spread regressions.
 - `note_local_lfo_spread`: spread of per-voice LFO values while notes overlap.
-- `fx_mode`, `delay_division_beats`, `tempo_synced_delay_samples`, `fx_tail_seconds`, `post_last_event_seconds`, `quality_mode`, `wet_dry_max_abs_diff`, `wet_dry_rms_diff`, and `wet_meaningful_passed`: wet-render proof for the onboard fixed-order FX path.
+- `fx_mode`, `delay_division_beats`, `tempo_synced_delay_samples`, `fx_tail_seconds`, `post_last_event_seconds`, `wet_dry_max_abs_diff`, `wet_dry_rms_diff`, and `wet_meaningful_passed`: wet-render proof for the onboard fixed-order FX path.
 - `mod_slot_schema_passed`: modulation harness check that canonical preset `mod_slots` objects are loaded into runtime TransMod slots.
 - `routed_max_abs_diff`, `routed_rms_diff`, `cleared_max_abs_diff`, and `cleared_rms_diff`: modulation route render proof metrics for created-route audibility and clear-slot determinism.
-- `realtime_quality_mode`, `offline_quality_mode`, `quality_modes_differ`, `difference_meaningful`, and `difference_bounded`: standalone realtime/offline quality comparison fields.
+- `realtime_block_samples`, `offline_block_samples`, `max_absolute_tolerance`, `rms_tolerance`, `both_finite` and `same_state_equivalent`: standalone same-state block-boundary comparison fields.
 - `max_abs_diff`, `rms_diff`, `peak_delta`: deterministic repeat comparison metrics.
 
 ## Headless Performance Bench
@@ -270,7 +432,8 @@ Each validation render should record:
 - metric results,
 - pass/fail summary.
 
-Current report schema uses `schema_version: 1` and a per-report `suite` field. Core-suite reports live under the supplied output directory and are disposable build artifacts.
+Reports use `schema_version: 1` and a per-report `suite` field, except the
+same-state realtime/offline block comparison, which uses schema 2. Core-suite reports live under the supplied output directory and are disposable build artifacts.
 
 Failed renders should keep audio artifacts and JSON reports for inspection.
 
@@ -284,3 +447,13 @@ The first implementation milestone is not complete until:
 - VST3 loads in Ableton,
 - Ableton state restore preserves the preset,
 - per-voice LFO ablation test passes.
+
+## Integrated Evidence - 2026-10-09
+
+The integrated Debug quality gate passed all 11 CTest entries and all 17 standalone core reports. The current reference-tool test has seven synthetic positive/negative cases; these are tool correctness tests, not original-plugin fidelity evidence.
+
+All eight LCD pages plus Part B and 2x exports have valid binding reports and clean capture logs. Repeated explicit Init captures are byte-identical to one another. This is a deterministic local-capture result, not equality to Sylenth1. A missing supplied snapshot preset exits with failure and produces no PNG.
+
+Snapshot mode initializes program 0/Init when `SYNTHIA_UI_SNAPSHOT_PRESET` is absent. Supply an explicit current preset path for any other state. Normal standalone/host restore behavior is unchanged outside snapshot mode.
+
+Current host qualification is tracked in `host-validation/native-rebuild-2026-10-09.md`. Optimized packaging, real-host acceptance, original-reference fidelity, and public distribution remain separate gates.

@@ -7,7 +7,7 @@ namespace synth
 {
 void Envelope::prepare(double newSampleRate) noexcept
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
     updateCachedRates();
     reset();
 }

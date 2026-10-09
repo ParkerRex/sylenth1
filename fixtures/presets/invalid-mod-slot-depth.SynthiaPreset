@@ -19,7 +19,7 @@
     "render_mode": "dry"
   },
   "preset": {
-    "schema_version": 1,
+    "schema_version": 2,
     "plugin_min_version": "0.1.0",
     "id": "invalid-mod-slot-depth",
     "display_name": "Invalid Mod Slot Depth",
@@ -29,8 +29,7 @@
       "test"
     ],
     "parameters": {
-      "voice.mode": "Poly",
-      "quality.realtime_mode": "Normal"
+      "voice.mode": "Poly"
     },
     "mod_slots": [
       {
@@ -40,7 +39,7 @@
         "scaler": "None",
         "depth_domain": "Physical",
         "depths": {
-          "amp.level_db": 1000.0
+          "layer.1.level_db": 1000.0
         }
       }
     ],

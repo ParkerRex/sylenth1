@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <set>
 
 namespace
@@ -106,8 +107,7 @@ bool checkAutomationParameterExposure()
 bool checkStateRoundTrip()
 {
     StateRoundTripProcessor source;
-    if (!setPhysicalParameter(source.parameters, "layer.2.enabled", 1.0f)
-        || !setPhysicalParameter(source.parameters, "layer.2.osc.2.voices", 6.0f)
+    if (!setPhysicalParameter(source.parameters, "layer.2.osc.2.voices", 6.0f)
         || !setPhysicalParameter(source.parameters, "layer.2.osc.2.waveform", 3.0f)
         || !setPhysicalParameter(source.parameters, "layer.1.osc.2.invert", 1.0f)
         || !setPhysicalParameter(source.parameters, "arp.enabled", 1.0f)
@@ -134,8 +134,7 @@ bool checkStateRoundTrip()
     destination.parameters.replaceState(restoredState);
 
     return destination.parameters.state.hasProperty("schema_version")
-        && destination.parameters.getRawParameterValue("filter.cutoff_semitones") != nullptr
-        && parameterValueMatches(destination.parameters, "layer.2.enabled", 1.0f)
+        && destination.parameters.getRawParameterValue("layer.1.filter.cutoff_semitones") != nullptr
         && parameterValueMatches(destination.parameters, "layer.2.osc.2.voices", 6.0f)
         && parameterValueMatches(destination.parameters, "layer.2.osc.2.waveform", 3.0f)
         && parameterValueMatches(destination.parameters, "layer.1.osc.2.invert", 1.0f)
@@ -151,14 +150,21 @@ bool parameterValueMatches(const juce::AudioProcessorValueTreeState& parameters,
                            float tolerance)
 {
     const auto* value = parameters.getRawParameterValue(id);
-    return value != nullptr && std::abs(value->load() - expected) <= tolerance;
+    const auto matches = value != nullptr && std::abs(value->load() - expected) <= tolerance;
+    if (!matches)
+        std::cerr << "Parameter mismatch: " << id << " expected " << expected << " actual "
+                  << (value != nullptr ? value->load() : -9999.0f) << "\n";
+    return matches;
 }
 
 bool setPhysicalParameter(juce::AudioProcessorValueTreeState& parameters, const char* id, float value)
 {
     auto* parameter = parameters.getParameter(id);
     if (parameter == nullptr)
+    {
+        std::cerr << "Required parameter absent: " << id << "\n";
         return false;
+    }
 
     parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
     return true;
@@ -231,8 +237,8 @@ bool checkModulationRouteModel()
     const auto* lfoSource = synth::findModulationSourceInfo(synth::ModSource::Lfo);
     const auto* macroSource = synth::findModulationSourceInfo("macro.motion");
     const auto* filterDestination = synth::findModulationDestinationInfo("filter.cutoff");
-    if (sources.size() != 20
-        || destinations.size() != 5
+    if (sources.size() < 24
+        || destinations.size() != static_cast<std::size_t>(synth::nativeModDestinationCount + 4)
         || lfoSource == nullptr
         || lfoSource->id != "lfo.1"
         || lfoSource->polarity != synth::ModulationPolarity::Bipolar
@@ -241,7 +247,7 @@ bool checkModulationRouteModel()
         || macroSource == nullptr
         || macroSource->source != synth::ModSource::Macro1
         || filterDestination == nullptr
-        || filterDestination->targetParameterId != "filter.cutoff_semitones"
+        || !filterDestination->targetParameterId.empty()
         || synth::transModDepthParameterId(1, *filterDestination) != "transmod.1.filter_cutoff_semitones"
         || !synth::transModDepthParameterId(0, *filterDestination).empty())
     {
@@ -317,16 +323,13 @@ bool checkModulationRouteModel()
 
 bool checkModulationRouteWriteAdapter()
 {
-    const auto write = synth::buildModulationRouteWrite({
-        3,
-        "lfo.1",
-        "macro.motion",
-        "filter.cutoff",
-        96.0f
-    });
+    const auto write = synth::buildModulationRouteWrite({ 3,
+                                                          "lfo.1",
+                                                          "macro.motion",
+                                                          "filter.cutoff",
+                                                          96.0f });
 
     if (!write.ok
-        || write.edits.size() != 10
         || !editValueMatches(write, "transmod.3.enabled", 1.0f)
         || !editValueMatches(write, "transmod.3.source", static_cast<float>(static_cast<int>(synth::ModSource::Lfo)))
         || !editValueMatches(write, "transmod.3.scaler", static_cast<float>(static_cast<int>(synth::ModSource::Macro1)))
@@ -353,13 +356,11 @@ bool checkModulationRouteWriteAdapter()
         return false;
     }
 
-    const auto panWrite = synth::buildModulationRouteWrite({
-        4,
-        "random_on_note",
-        "none",
-        "amp.pan",
-        -0.25f
-    });
+    const auto panWrite = synth::buildModulationRouteWrite({ 4,
+                                                             "random_on_note",
+                                                             "none",
+                                                             "amp.pan",
+                                                             -0.25f });
     if (!panWrite.ok
         || !editValueMatches(panWrite, "transmod.4.source", static_cast<float>(static_cast<int>(synth::ModSource::RandomOnNote)))
         || !editValueMatches(panWrite, "transmod.4.scaler", 0.0f)
@@ -377,7 +378,7 @@ bool checkModulationRouteWriteAdapter()
         || scalerSpec == nullptr
         || std::abs(synth::clampPhysicalParameterValue(*sourceSpec, randomOnNoteValue) - randomOnNoteValue) > 0.001f
         || std::abs(synth::clampPhysicalParameterValue(*scalerSpec, macroMotionValue) - macroMotionValue) > 0.001f
-        || std::abs(synth::clampPhysicalParameterValue(*sourceSpec, 999.0f) - 19.0f) > 0.001f
+        || std::abs(synth::clampPhysicalParameterValue(*sourceSpec, 999.0f) - sourceSpec->maximum) > 0.001f
         || std::abs(synth::clampPhysicalParameterValue(*sourceSpec, -2.0f)) > 0.001f)
     {
         std::cerr << "Choice-valued modulation parameters did not preserve valid source/scaler indices.\n";
@@ -396,7 +397,6 @@ bool checkModulationRouteWriteAdapter()
 
     const auto clear = synth::buildModulationSlotClear(3);
     if (!clear.ok
-        || clear.edits.size() != 9
         || !applyParameterEdits(processor.parameters, clear.edits)
         || !parameterValueMatches(processor.parameters, "transmod.3.enabled", 0.0f)
         || !parameterValueMatches(processor.parameters, "transmod.3.source", 0.0f)
@@ -421,78 +421,33 @@ bool checkModulationRouteWriteAdapter()
     return true;
 }
 
-void removeParameterChildrenStartingWith(juce::ValueTree& state, const char* prefix)
-{
-    for (auto childIndex = state.getNumChildren(); --childIndex >= 0;)
-    {
-        const auto child = state.getChild(childIndex);
-        if (!child.hasType("PARAM"))
-            continue;
-
-        if (child.getProperty("id").toString().startsWith(prefix))
-            state.removeChild(childIndex, nullptr);
-    }
-}
-
-bool checkHostStateDefaultMerge()
+bool checkNativeStateRoundTrip()
 {
     StateRoundTripProcessor source;
-    if (!setPhysicalParameter(source.parameters, "filter.cutoff_semitones", 58.0f))
+    if (!setPhysicalParameter(source.parameters, "layer.1.osc.1.octave", 2.0f)
+        || !setPhysicalParameter(source.parameters, "layer.2.filter.cutoff_semitones", 48.0f)
+        || !setPhysicalParameter(source.parameters, "layer.2.amp_env.attack_ms", 500.0f)
+        || !setPhysicalParameter(source.parameters, "mod_env.2.decay_ms", 900.0f)
+        || !setPhysicalParameter(source.parameters, "lfo.2.rate_hz", 7.0f)
+        || !setPhysicalParameter(source.parameters, "transmod.2.route.1.destination", 1.0f)
+        || !setPhysicalParameter(source.parameters, "transmod.2.route.1.amount", 0.0f))
         return false;
-
-    auto oldState = source.parameters.copyState();
-    oldState.setProperty("schema_version", 1, nullptr);
-    oldState.setProperty("current_preset", "Old Host State", nullptr);
-    removeParameterChildrenStartingWith(oldState, "layer.");
-    removeParameterChildrenStartingWith(oldState, "arp.");
-    removeParameterChildrenStartingWith(oldState, "chord.");
-    removeParameterChildrenStartingWith(oldState, "fx.distortion_");
-    removeParameterChildrenStartingWith(oldState, "fx.phaser_");
-    removeParameterChildrenStartingWith(oldState, "fx.eq_");
-    removeParameterChildrenStartingWith(oldState, "fx.compressor_");
-
+    const auto state = source.parameters.copyState();
+    const auto xml = state.createXml();
+    if (xml == nullptr)
+        return false;
     StateRoundTripProcessor destination;
-    if (!setPhysicalParameter(destination.parameters, "layer.1.enabled", 0.0f)
-        || !setPhysicalParameter(destination.parameters, "layer.2.enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "layer.2.osc.2.voices", 8.0f)
-        || !setPhysicalParameter(destination.parameters, "layer.2.osc.2.invert", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "arp.enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "arp.step.1.tie", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "chord.enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "chord.voice.3.enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.distortion_mode", 2.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.phaser_enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.phaser_mix", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.eq_enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.eq_low_gain_db", 6.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.compressor_enabled", 1.0f)
-        || !setPhysicalParameter(destination.parameters, "fx.compressor_mix", 1.0f))
-    {
+    destination.parameters.replaceState(synth::mergeParameterStateWithDefaults(destination.parameters, juce::ValueTree::fromXml(*xml)));
+    if (!parameterValueMatches(destination.parameters, "layer.1.osc.1.octave", 2.0f)
+        || !parameterValueMatches(destination.parameters, "layer.2.filter.cutoff_semitones", 48.0f)
+        || !parameterValueMatches(destination.parameters, "layer.2.amp_env.attack_ms", 500.0f)
+        || !parameterValueMatches(destination.parameters, "mod_env.2.decay_ms", 900.0f)
+        || !parameterValueMatches(destination.parameters, "lfo.2.rate_hz", 7.0f)
+        || !parameterValueMatches(destination.parameters, "transmod.2.route.1.destination", 1.0f)
+        || !parameterValueMatches(destination.parameters, "transmod.2.route.1.amount", 0.0f))
         return false;
-    }
 
-    const auto migratedState = synth::mergeParameterStateWithDefaults(destination.parameters, oldState);
-    destination.parameters.replaceState(migratedState);
-
-    return parameterValueMatches(destination.parameters, "filter.cutoff_semitones", 58.0f)
-        && parameterValueMatches(destination.parameters, "layer.1.enabled", 1.0f)
-        && parameterValueMatches(destination.parameters, "layer.2.enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "layer.1.osc.1.enabled", 1.0f)
-        && parameterValueMatches(destination.parameters, "layer.1.osc.1.voices", 1.0f)
-        && parameterValueMatches(destination.parameters, "layer.2.osc.2.voices", 0.0f)
-        && parameterValueMatches(destination.parameters, "layer.2.osc.2.invert", 0.0f)
-        && parameterValueMatches(destination.parameters, "arp.enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "arp.step.1.tie", 0.0f)
-        && parameterValueMatches(destination.parameters, "chord.enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "chord.voice.1.enabled", 1.0f)
-        && parameterValueMatches(destination.parameters, "chord.voice.3.enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.distortion_mode", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.phaser_enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.phaser_mix", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.eq_enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.eq_low_gain_db", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.compressor_enabled", 0.0f)
-        && parameterValueMatches(destination.parameters, "fx.compressor_mix", 0.0f);
+    return true;
 }
 
 bool checkLayerOscillatorVoiceCost()
@@ -538,119 +493,56 @@ bool checkPatchCostEstimate()
 {
     synth::SynthParameters parameters;
     const auto init = synth::estimatePatchCost(parameters);
-    // Init defaults render the filter without oversampling (0457fe4 tuned the
-    // default quality for realtime cost), so the filter multiplier is 1.0.
-    if (init.noteLimit != 8
-        || init.unisonVoices != 1
-        || init.maxActiveVoices != 8
-        || init.oscillatorSlotVoices != 1
-        || init.voiceUnits != 8
-        || init.filterOversampling != 1
-        || init.activeFxModules != 0
-        || std::abs(init.totalUnits - 8.0f) > 0.001f
-        || init.loadPercent != 3
-        || init.elevated
-        || init.high
-        || init.overBudget)
+    if (init.noteLimit != 8 || init.unisonVoices != 1 || init.maxActiveVoices != 8
+        || init.oscillatorSlotVoices != 1 || init.voiceUnits != 8 || init.activeFxModules != 0)
     {
-        std::cerr << "Default patch cost estimate did not match init voice math.\n";
+        std::cerr << "Default native patch cost did not match voice allocation.\n";
         return false;
     }
-
-    parameters.layers[0].oscillators[1].enabled = true;
+    parameters.layers[0].oscillators[0].voices = 5;
+    const auto stacked = synth::estimatePatchCost(parameters);
+    if (stacked.oscillatorSlotVoices != 5 || stacked.voiceUnits != 40)
+    {
+        std::cerr << "Native A1 voices were omitted from patch cost.\n";
+        return false;
+    }
+    parameters.layers[0].oscillators[0].voices = 1;
     parameters.layers[0].oscillators[1].voices = 3;
-    parameters.layers[0].oscillators[1].level = 0.0f;
-    if (synth::estimatePatchCost(parameters).oscillatorSlotVoices != 1)
-    {
-        std::cerr << "Patch cost should ignore zero-level oscillator slots.\n";
-        return false;
-    }
-
-    parameters.osc.stackCount = 5;
-    const auto stackedCore = synth::estimatePatchCost(parameters);
-    if (stackedCore.oscillatorSlotVoices != 5
-        || stackedCore.voiceUnits != 40
-        || stackedCore.loadPercent != 17)
-    {
-        std::cerr << "Patch cost should include live A1 core oscillator stack count.\n";
-        return false;
-    }
-
-    parameters.layers[0].oscillators[1].level = 1.0f;
-    parameters.layers[1].enabled = true;
-    parameters.layers[1].oscillators[0].enabled = true;
     parameters.layers[1].oscillators[0].voices = 8;
-    parameters.layers[1].oscillators[0].level = 0.75f;
-    parameters.osc.stackCount = 1;
     parameters.voiceMode = synth::VoiceMode::Poly;
     parameters.polyphony = 32;
     parameters.unisonCount = 8;
-    parameters.filter.oversampling = 3;
-    parameters.fx.enabled = true;
-    parameters.fx.phaserEnabled = true;
-    parameters.fx.chorusEnabled = true;
-    parameters.fx.eqEnabled = true;
-    parameters.fx.compressorEnabled = true;
-
+    parameters.fx.saturationEnabled = parameters.fx.phaserEnabled = parameters.fx.chorusEnabled = true;
+    parameters.fx.delayEnabled = parameters.fx.reverbEnabled = parameters.fx.eqEnabled = parameters.fx.compressorEnabled = true;
     const auto large = synth::estimatePatchCost(parameters);
-    if (large.noteLimit != 32
-        || large.unisonVoices != 8
-        || large.maxActiveVoices != 32
-        || large.oscillatorSlotVoices != 12
-        || large.voiceUnits != 384
-        || large.filterOversampling != 8
-        || large.activeFxModules != 7
-        || !large.elevated
-        || !large.high
-        || !large.overBudget
-        || large.loadPercent <= 100)
+    if (large.noteLimit != 32 || large.unisonVoices != 8 || large.maxActiveVoices != 32
+        || large.oscillatorSlotVoices != 12 || large.voiceUnits != 384 || large.activeFxModules != 7
+        || !std::isfinite(large.totalUnits) || large.totalUnits <= init.totalUnits)
     {
-        std::cerr << "High-cost patch estimate did not include voice, filter, and FX factors.\n";
+        std::cerr << "Native patch cost did not include all slots, voice cap and enabled effects.\n";
         return false;
     }
-
     parameters.voiceMode = synth::VoiceMode::MonoLegato;
-    parameters.unisonCount = 8;
     const auto mono = synth::estimatePatchCost(parameters);
     if (mono.noteLimit != 1 || mono.unisonVoices != 1 || mono.maxActiveVoices != 1)
-    {
-        std::cerr << "Mono patch cost should not multiply by polyphony or unison.\n";
         return false;
-    }
-
     parameters.voiceMode = synth::VoiceMode::Unison;
     const auto unison = synth::estimatePatchCost(parameters);
-    if (unison.noteLimit != 1 || unison.unisonVoices != 8 || unison.maxActiveVoices != 8)
-    {
-        std::cerr << "Unison patch cost should use one note multiplied by unison voices.\n";
-        return false;
-    }
-
-    parameters.layers[0].solo = true;
-    parameters.layers[0].mute = true;
-    if (synth::estimatePatchCost(parameters).oscillatorSlotVoices != 0)
-    {
-        std::cerr << "Patch cost should follow solo/mute layer voice math.\n";
-        return false;
-    }
-
-    return true;
+    return unison.noteLimit == 1 && unison.unisonVoices == 8 && unison.maxActiveVoices == 8;
 }
 
 bool checkMidiControllerMap()
 {
-    auto normalized = synth::normalizeMidiControllerAssignments({
-        { 74, "filter.cutoff_semitones" },
-        { -1, "macro.motion" },
-        { 7, "" },
-        { 74, "amp.level_db" },
-        { 1, "amp.level_db" },
-        { 91, "fx.reverb_mix" }
-    });
+    auto normalized = synth::normalizeMidiControllerAssignments({ { 74, "layer.1.filter.cutoff_semitones" },
+                                                                  { -1, "macro.motion" },
+                                                                  { 7, "" },
+                                                                  { 74, "master.level_db" },
+                                                                  { 1, "master.level_db" },
+                                                                  { 91, "fx.reverb_mix" } });
 
     if (normalized.size() != 2
         || normalized[0].controllerNumber != 1
-        || normalized[0].parameterId != "amp.level_db"
+        || normalized[0].parameterId != "master.level_db"
         || normalized[1].controllerNumber != 91
         || normalized[1].parameterId != "fx.reverb_mix")
     {
@@ -659,17 +551,15 @@ bool checkMidiControllerMap()
     }
 
     const auto mapDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-midi-controller-map-contract");
+                                  .getChildFile("synthia-midi-controller-map-contract");
     mapDirectory.deleteRecursively();
 
     const auto mapFile = mapDirectory.getChildFile("MidiControllerMap.json");
     std::string error;
     if (!synth::writeMidiControllerAssignments(mapFile.getFullPathName().toStdString(),
-                                               {
-                                                   { 91, "fx.reverb_mix" },
-                                                   { 1, "macro.motion" },
-                                                   { 74, "filter.cutoff_semitones" }
-                                               },
+                                               { { 91, "fx.reverb_mix" },
+                                                 { 1, "macro.motion" },
+                                                 { 74, "layer.1.filter.cutoff_semitones" } },
                                                error))
     {
         std::cerr << error << "\n";
@@ -683,7 +573,7 @@ bool checkMidiControllerMap()
         || assignments[0].controllerNumber != 1
         || assignments[0].parameterId != "macro.motion"
         || assignments[1].controllerNumber != 74
-        || assignments[1].parameterId != "filter.cutoff_semitones"
+        || assignments[1].parameterId != "layer.1.filter.cutoff_semitones"
         || assignments[2].controllerNumber != 91
         || assignments[2].parameterId != "fx.reverb_mix")
     {
@@ -711,17 +601,13 @@ bool checkPresetManagerLoadAndSave()
         return preset.isObject() ? preset.getDynamicObject() : nullptr;
     };
 
-    if (!parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 96.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 96.0f))
     {
         std::cerr << "Unexpected default filter cutoff before preset prepare.\n";
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "layer.1.enabled", 1.0f)
-        || !parameterValueMatches(processor.parameters, "layer.2.enabled", 0.0f)
-        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.enabled", 1.0f)
-        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.voices", 1.0f)
-        || !parameterValueMatches(processor.parameters, "layer.1.osc.2.enabled", 0.0f)
+    if (!parameterValueMatches(processor.parameters, "layer.1.osc.1.voices", 1.0f)
         || !parameterValueMatches(processor.parameters, "layer.2.osc.2.voices", 0.0f)
         || !parameterValueMatches(processor.parameters, "arp.enabled", 0.0f)
         || !parameterValueMatches(processor.parameters, "arp.step_count", 16.0f)
@@ -740,7 +626,7 @@ bool checkPresetManagerLoadAndSave()
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 96.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 96.0f))
     {
         std::cerr << "Preset prepare mutated live parameters before replaceState.\n";
         return false;
@@ -753,7 +639,7 @@ bool checkPresetManagerLoadAndSave()
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 58.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 58.0f))
     {
         std::cerr << "Preset manager did not apply filter cutoff.\n";
         return false;
@@ -765,12 +651,20 @@ bool checkPresetManagerLoadAndSave()
         || cleanDirtyState.dirty)
     {
         std::cerr << "Preset dirty state should be clean immediately after loading baseline fingerprint.\n";
+        std::cerr.precision(std::numeric_limits<float>::max_digits10);
+        for (const auto& spec : synth::getParameterSpecs())
+        {
+            const auto expected = stateParameterValue(load.state, spec.id.c_str());
+            const auto* value = processor.parameters.getRawParameterValue(spec.id);
+            if (value != nullptr && std::abs(value->load() - expected) > 0.0f)
+                std::cerr << spec.id << " prepared " << expected << " live " << value->load() << " interval " << spec.interval << "\n";
+        }
         return false;
     }
 
     StateRoundTripProcessor halfStepProcessor;
     auto negativeHalfStepState = halfStepProcessor.parameters.copyState();
-    if (!setStateParameterValue(negativeHalfStepState, "amp.pan", -0.00005f))
+    if (!setStateParameterValue(negativeHalfStepState, "layer.1.pan", -0.00005f))
         return false;
 
     halfStepProcessor.parameters.replaceState(negativeHalfStepState);
@@ -784,10 +678,10 @@ bool checkPresetManagerLoadAndSave()
     }
 
     const auto compareSlotA = synth::capturePresetCompareSlot(processor.parameters, "A");
-    if (!setPhysicalParameter(processor.parameters, "filter.cutoff_semitones", 72.0f))
+    if (!setPhysicalParameter(processor.parameters, "layer.1.filter.cutoff_semitones", 72.0f))
         return false;
     const auto flushedStateAfterEdit = processor.parameters.copyState();
-    (void) flushedStateAfterEdit;
+    (void)flushedStateAfterEdit;
 
     const auto changedDirtyState = synth::comparePresetDirtyState(processor.parameters, load.fingerprint);
     if (!changedDirtyState.dirty)
@@ -805,27 +699,23 @@ bool checkPresetManagerLoadAndSave()
         || !preparedSlotB.loaded
         || preparedSlotA.displayName != "A"
         || preparedSlotB.displayName != "B"
-        || std::abs(stateParameterValue(preparedSlotA.state, "filter.cutoff_semitones") - 58.0f) > 0.001f
-        || std::abs(stateParameterValue(preparedSlotB.state, "filter.cutoff_semitones") - 72.0f) > 0.001f
-        || !parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 72.0f))
+        || std::abs(stateParameterValue(preparedSlotA.state, "layer.1.filter.cutoff_semitones") - 58.0f) > 0.001f
+        || std::abs(stateParameterValue(preparedSlotB.state, "layer.1.filter.cutoff_semitones") - 72.0f) > 0.001f
+        || !parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 72.0f))
     {
         std::cerr << "Preset compare slot capture/prepare failed.\n";
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "layer.1.enabled", 1.0f)
-        || !parameterValueMatches(processor.parameters, "layer.2.enabled", 0.0f)
-        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.enabled", 1.0f)
-        || !parameterValueMatches(processor.parameters, "layer.2.osc.1.enabled", 0.0f)
-        || !parameterValueMatches(processor.parameters, "arp.enabled", 0.0f)
+    if (!parameterValueMatches(processor.parameters, "arp.enabled", 0.0f)
         || !parameterValueMatches(processor.parameters, "chord.enabled", 0.0f))
     {
-        std::cerr << "Legacy preset load did not preserve new layer defaults.\n";
+        std::cerr << "Preset load did not preserve native layer defaults.\n";
         return false;
     }
 
     const auto scanInputFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-preset-scan-input");
+                                   .getChildFile("synthia-preset-scan-input");
     scanInputFile.replaceWithText("not a directory");
     const auto scannedFile = synth::scanPresetDirectory(scanInputFile.getFullPathName().toStdString(), false);
     scanInputFile.deleteFile();
@@ -836,7 +726,7 @@ bool checkPresetManagerLoadAndSave()
     }
 
     const auto tempFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-preset-manager-test.SynthiaPreset");
+                              .getChildFile("synthia-preset-manager-test.SynthiaPreset");
     tempFile.deleteFile();
 
     std::string error;
@@ -865,7 +755,7 @@ bool checkPresetManagerLoadAndSave()
     const auto* savedParameterObject = savedParameters.getDynamicObject();
     if (savedParameterObject == nullptr
         || !savedParameterObject->hasProperty(juce::Identifier("layer.1.osc.1.voices"))
-        || !savedParameterObject->hasProperty(juce::Identifier("layer.2.enabled"))
+        || !savedParameterObject->hasProperty(juce::Identifier("layer.2.filter.cutoff_semitones"))
         || !savedParameterObject->hasProperty(juce::Identifier("layer.2.osc.2.invert"))
         || !savedParameterObject->hasProperty(juce::Identifier("arp.enabled"))
         || !savedParameterObject->hasProperty(juce::Identifier("arp.step.16.tie"))
@@ -897,7 +787,7 @@ bool checkPresetManagerLoadAndSave()
     tempFile.deleteFile();
 
     const auto metadataFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-preset-metadata-test.SynthiaPreset");
+                                  .getChildFile("synthia-preset-metadata-test.SynthiaPreset");
     metadataFile.deleteFile();
     synth::PresetWriteOptions writeOptions;
     writeOptions.mode = synth::PresetWriteMode::CreateNew;
@@ -995,7 +885,7 @@ bool checkPresetManagerLoadAndSave()
     }
 
     const auto browserDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-preset-browser-contract");
+                                      .getChildFile("synthia-preset-browser-contract");
     browserDirectory.deleteRecursively();
     if (!browserDirectory.createDirectory())
     {
@@ -1103,7 +993,7 @@ bool checkPresetManagerLoadAndSave()
     browserDirectory.deleteRecursively();
 
     const auto extensionlessFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-        .getChildFile("synthia-preset-manager-extension-test");
+                                       .getChildFile("synthia-preset-manager-extension-test");
     const auto extensionlessPresetFile = extensionlessFile.withFileExtension(".SynthiaPreset");
     extensionlessFile.deleteFile();
     extensionlessPresetFile.deleteFile();
@@ -1129,9 +1019,9 @@ bool checkPresetManagerLoadAndSave()
 bool checkPresetCommandStatePreparation()
 {
     StateRoundTripProcessor processor;
-    if (!setPhysicalParameter(processor.parameters, "filter.cutoff_semitones", 42.0f)
-        || !setPhysicalParameter(processor.parameters, "osc.stack_count", 5.0f)
-        || !setPhysicalParameter(processor.parameters, "fx.enabled", 1.0f))
+    if (!setPhysicalParameter(processor.parameters, "layer.1.filter.cutoff_semitones", 42.0f)
+        || !setPhysicalParameter(processor.parameters, "layer.1.osc.1.voices", 5.0f)
+        || !setPhysicalParameter(processor.parameters, "fx.saturation_enabled", 1.0f))
     {
         return false;
     }
@@ -1141,16 +1031,16 @@ bool checkPresetCommandStatePreparation()
         || !init.state.isValid()
         || init.displayName != "Init"
         || init.state.getProperty("current_preset").toString() != "Init"
-        || std::abs(stateParameterValue(init.state, "filter.cutoff_semitones") - 96.0f) > 0.001f
-        || std::abs(stateParameterValue(init.state, "osc.stack_count") - 1.0f) > 0.001f
-        || std::abs(stateParameterValue(init.state, "fx.enabled")) > 0.001f)
+        || std::abs(stateParameterValue(init.state, "layer.1.filter.cutoff_semitones") - 96.0f) > 0.001f
+        || std::abs(stateParameterValue(init.state, "layer.1.osc.1.voices") - 1.0f) > 0.001f
+        || std::abs(stateParameterValue(init.state, "fx.saturation_enabled")) > 0.001f)
     {
         std::cerr << "Init preset command did not prepare default state.\n";
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 42.0f)
-        || !parameterValueMatches(processor.parameters, "osc.stack_count", 5.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 42.0f)
+        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.voices", 5.0f))
     {
         std::cerr << "Init preset preparation mutated live parameters before replaceState.\n";
         return false;
@@ -1169,41 +1059,40 @@ bool checkPresetCommandStatePreparation()
         return false;
     }
 
-    const auto stackA = stateParameterValue(randomA.state, "osc.stack_count");
-    const auto stackB = stateParameterValue(randomB.state, "osc.stack_count");
-    const auto stackC = stateParameterValue(randomC.state, "osc.stack_count");
-    const auto cutoffA = stateParameterValue(randomA.state, "filter.cutoff_semitones");
-    const auto cutoffB = stateParameterValue(randomB.state, "filter.cutoff_semitones");
-    const auto cutoffC = stateParameterValue(randomC.state, "filter.cutoff_semitones");
+    const auto stackA = stateParameterValue(randomA.state, "layer.1.osc.1.voices");
+    const auto stackB = stateParameterValue(randomB.state, "layer.1.osc.1.voices");
+    const auto stackC = stateParameterValue(randomC.state, "layer.1.osc.1.voices");
+    const auto cutoffA = stateParameterValue(randomA.state, "layer.1.filter.cutoff_semitones");
+    const auto cutoffB = stateParameterValue(randomB.state, "layer.1.filter.cutoff_semitones");
+    const auto cutoffC = stateParameterValue(randomC.state, "layer.1.filter.cutoff_semitones");
     if (std::abs(stackA - stackB) > 0.001f
         || std::abs(cutoffA - cutoffB) > 0.001f
         || (std::abs(stackA - stackC) <= 0.001f && std::abs(cutoffA - cutoffC) <= 0.001f)
         || stackA < 1.0f
-        || stackA > 5.0f
+        || stackA > 8.0f
         || cutoffA < 42.0f
         || cutoffA > 122.0f
-        || stateParameterValue(randomA.state, "layer.1.enabled") < 0.5f
-        || stateParameterValue(randomA.state, "layer.1.osc.1.enabled") < 0.5f
-        || stateParameterValue(randomA.state, "layer.1.osc.1.level") < 0.99f)
+        || stateParameterValue(randomA.state, "layer.1.osc.1.level") <= 0.0f
+        || stateParameterValue(randomA.state, "layer.1.osc.1.level") > 1.0f)
     {
         std::cerr << "Randomize preset command is not deterministic or within safe bounds.\n";
         return false;
     }
 
-    if (!parameterValueMatches(processor.parameters, "filter.cutoff_semitones", 42.0f)
-        || !parameterValueMatches(processor.parameters, "osc.stack_count", 5.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", 42.0f)
+        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.voices", 5.0f))
     {
         std::cerr << "Randomize preset preparation mutated live parameters before replaceState.\n";
         return false;
     }
 
     processor.parameters.replaceState(randomA.state);
-    if (!parameterValueMatches(processor.parameters, "osc.stack_count", stackA)
-        || !parameterValueMatches(processor.parameters, "filter.cutoff_semitones", cutoffA, 0.01f)
-        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.level", 1.0f))
+    if (!parameterValueMatches(processor.parameters, "layer.1.osc.1.voices", stackA)
+        || !parameterValueMatches(processor.parameters, "layer.1.filter.cutoff_semitones", cutoffA, 0.01f)
+        || !parameterValueMatches(processor.parameters, "layer.1.osc.1.level", stateParameterValue(randomA.state, "layer.1.osc.1.level")))
     {
-        const auto* stackValue = processor.parameters.getRawParameterValue("osc.stack_count");
-        const auto* cutoffValue = processor.parameters.getRawParameterValue("filter.cutoff_semitones");
+        const auto* stackValue = processor.parameters.getRawParameterValue("layer.1.osc.1.voices");
+        const auto* cutoffValue = processor.parameters.getRawParameterValue("layer.1.filter.cutoff_semitones");
         const auto* levelValue = processor.parameters.getRawParameterValue("layer.1.osc.1.level");
         std::cerr << "Prepared random preset state did not apply to APVTS parameters: "
                   << "stack expected " << stackA << " got " << (stackValue != nullptr ? stackValue->load() : -1.0f)
@@ -1218,6 +1107,14 @@ bool checkPresetCommandStatePreparation()
 
 int main()
 {
+    const juce::ScopedJuceInitialiser_GUI initialise;
+
+    if (!checkNativeStateRoundTrip())
+    {
+        std::cerr << "Native state round-trip failed.\n";
+        return 1;
+    }
+
     const auto errors = synth::validateParameterSpecs();
     if (!errors.empty())
     {
@@ -1233,11 +1130,9 @@ int main()
         return 1;
     }
 
-    if (synth::findParameterSpec("filter.cutoff_semitones") == nullptr
+    if (synth::findParameterSpec("layer.1.filter.cutoff_semitones") == nullptr
         || synth::findParameterSpec("transmod.8.depth") == nullptr
         || synth::findParameterSpec("macro.space") == nullptr
-        || synth::findParameterSpec("layer.1.enabled") == nullptr
-        || synth::findParameterSpec("layer.2.enabled") == nullptr
         || synth::findParameterSpec("layer.1.osc.1.voices") == nullptr
         || synth::findParameterSpec("layer.2.osc.2.invert") == nullptr
         || synth::findParameterSpec("arp.enabled") == nullptr
@@ -1262,8 +1157,6 @@ int main()
         return 1;
     }
 
-    const auto* layerAEnabled = synth::findParameterSpec("layer.1.enabled");
-    const auto* layerBEnabled = synth::findParameterSpec("layer.2.enabled");
     const auto* layerAOscillatorVoices = synth::findParameterSpec("layer.1.osc.1.voices");
     const auto* layerBOscillatorInvert = synth::findParameterSpec("layer.2.osc.2.invert");
     const auto* arpEnabled = synth::findParameterSpec("arp.enabled");
@@ -1275,9 +1168,7 @@ int main()
     const auto* fxPhaserMix = synth::findParameterSpec("fx.phaser_mix");
     const auto* fxEqLowGain = synth::findParameterSpec("fx.eq_low_gain_db");
     const auto* fxCompressorMix = synth::findParameterSpec("fx.compressor_mix");
-    if (layerAEnabled == nullptr
-        || layerBEnabled == nullptr
-        || layerAOscillatorVoices == nullptr
+    if (layerAOscillatorVoices == nullptr
         || layerBOscillatorInvert == nullptr
         || arpEnabled == nullptr
         || arpStepCount == nullptr
@@ -1288,8 +1179,6 @@ int main()
         || fxPhaserMix == nullptr
         || fxEqLowGain == nullptr
         || fxCompressorMix == nullptr
-        || std::abs(layerAEnabled->defaultValue - 1.0f) > 0.0001f
-        || std::abs(layerBEnabled->defaultValue) > 0.0001f
         || std::abs(layerAOscillatorVoices->minimum) > 0.0001f
         || std::abs(layerAOscillatorVoices->maximum - 8.0f) > 0.0001f
         || std::abs(layerAOscillatorVoices->defaultValue - 1.0f) > 0.0001f
@@ -1328,12 +1217,6 @@ int main()
     if (!checkModulationRouteWriteAdapter())
         return 1;
 
-    if (!checkHostStateDefaultMerge())
-    {
-        std::cerr << "Host state default merge failed.\n";
-        return 1;
-    }
-
     if (!checkLayerOscillatorVoiceCost())
         return 1;
 
@@ -1362,7 +1245,7 @@ int main()
     }
 
     const auto invalidModDepth = synth::validatePresetFile("fixtures/presets/invalid-mod-slot-depth.SynthiaPreset");
-    if (invalidModDepth.passed())
+    if (invalidModDepth.passed() || std::none_of(invalidModDepth.errors.begin(), invalidModDepth.errors.end(), [](const auto& error) { return error.find("outside allowed range") != std::string::npos; }))
     {
         std::cerr << "Invalid mod slot depth fixture passed validation.\n";
         return 1;

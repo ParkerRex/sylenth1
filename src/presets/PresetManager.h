@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -139,6 +140,9 @@ PresetCompareSlot capturePresetCompareSlot(juce::AudioProcessorValueTreeState& p
                                            const std::string& label);
 PresetLoadResult preparePresetCompareSlotState(juce::AudioProcessorValueTreeState& parameters,
                                                const PresetCompareSlot& slot);
+
+std::optional<float> parseStateParameterNumber(const juce::var& value);
+bool writeOwnedStateFile(const std::filesystem::path& path, const juce::String& text, bool overwrite, std::string& error);
 
 juce::ValueTree mergeParameterStateWithDefaults(juce::AudioProcessorValueTreeState& parameters,
                                                 const juce::ValueTree& overrideState);

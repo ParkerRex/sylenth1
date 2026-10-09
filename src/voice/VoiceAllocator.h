@@ -24,17 +24,19 @@ public:
     void syncVoiceLimit(const SynthParameters& parameters) noexcept;
     void syncActiveVoiceModulators(const SynthParameters& parameters) noexcept;
     void process(int numSamples) noexcept;
+    void advanceIdleModulators(int numSamples, const SynthParameters& parameters) noexcept;
     StereoFrame renderSample(const SynthParameters& parameters) noexcept;
     // Renders up to renderBlockMaxSamples into the caller's buffers (overwritten,
     // not accumulated), preserving renderSample's per-sample normalization and
     // voice-removal semantics.
     void renderBlock(const SynthParameters& parameters, float* outLeft, float* outRight,
-                     int numSamples) noexcept;
+                     int numSamples, float* phaserCenterOffsetsHz = nullptr) noexcept;
 
     int activeVoiceCount() const noexcept;
     const Voice* getVoice(int index) const noexcept;
     float monoLfoPhase() const noexcept { return monoLfo.getPhase(); }
     float monoLfoValue() const noexcept { return monoLfo.getValue(); }
+    float monoLfo2Phase() const noexcept { return monoLfo2.getPhase(); }
 
 private:
     static constexpr int maxVoiceSlots = 32;
@@ -50,6 +52,7 @@ private:
     bool retargetActiveNote(int fromNote, int toNote, float velocity, const SynthParameters& parameters) noexcept;
     bool allocationShapeChanged(const SynthParameters& parameters) const noexcept;
     void rememberAllocationShape(const SynthParameters& parameters) noexcept;
+    void syncSecondMonoLfoConfig(const SynthParameters& parameters) noexcept;
     void syncMonoLfoConfig(const SynthParameters& parameters) noexcept;
     void markVoiceActive(int voiceIndex) noexcept;
     void removeActiveVoiceAt(int activeListIndex) noexcept;
@@ -57,7 +60,10 @@ private:
     std::vector<Voice> voices;
     std::array<int, maxVoiceSlots> activeVoiceIndices {};
     int activeVoiceSlotCount = 0;
+    std::array<std::uint64_t, maxVoiceSlots> voiceTriggerOrders {};
+    std::uint64_t voiceTriggerCounter = 0;
     Lfo monoLfo;
+    Lfo monoLfo2;
     bool sustainPedalDown = false;
     std::array<bool, 128> heldNotes {};
     std::array<bool, 128> sustainedNotes {};
@@ -68,13 +74,7 @@ private:
     int allocationPolyphony = 8;
     int allocationUnisonCount = 1;
     bool allocationShapeInitialized = false;
-    LfoShapeChoice cachedMonoLfoShape = LfoShapeChoice::SawDown;
-    LfoRateMode cachedMonoLfoRateMode = LfoRateMode::Sync;
-    int cachedMonoLfoSyncDivision = 3;
-    float cachedMonoLfoRateHz = 2.0f;
-    float cachedMonoLfoPhaseDegrees = 0.0f;
-    float cachedMonoTempoBpm = 120.0f;
-    bool monoLfoConfigInitialized = false;
+    int lastPlayedNote = -1;
     unsigned int randomState = 0xdecafbadu;
 };
 } // namespace synth

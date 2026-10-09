@@ -7,21 +7,18 @@ Use this note for local Ableton validation builds. It is not a distribution or n
 From the repo root:
 
 ```bash
-/opt/homebrew/bin/cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DSYNTHIA_ENABLE_TESTS=ON
-/opt/homebrew/bin/cmake --build build-release --config Release
-/opt/homebrew/bin/ctest --test-dir build-release --output-on-failure
-./build-release/SynthiaRender --suite core --output-dir build-release/reports/core
-scripts/check-plugin-bundles.sh build-release
+scripts/build-release-bundles.sh --config RelWithDebInfo --build-dir build-release
+scripts/check-plugin-bundles.sh build-release RelWithDebInfo
 ```
 
-`scripts/check-plugin-bundles.sh` verifies Standalone, AU, and VST3 bundle existence, executable architecture, key Info.plist metadata, and bundled factory presets.
+The release command runs all CTest tests and the standalone core suite before ad-hoc signing. The bundle checker fails on missing native Intel/Apple Silicon code, an executable targeting newer than macOS 11, wrong metadata, any changed/missing factory file, or an invalid sealed signature. It checks the exact configuration requested and never selects another configuration's stale bundles.
 
 ## Install
 
 Install the local AU and VST3 into the current user's plugin folders:
 
 ```bash
-scripts/install-local-plugins.sh build-release
+scripts/install-local-plugins.sh build-release RelWithDebInfo
 ```
 
 Installed paths:
@@ -29,10 +26,10 @@ Installed paths:
 - AU: `~/Library/Audio/Plug-Ins/Components/Synthia.component`
 - VST3: `~/Library/Audio/Plug-Ins/VST3/Synthia.vst3`
 
-The install script ad-hoc signs the copied bundles for local host scanning when `codesign` is available. To skip that during debugging:
+The install script checks the source bundles before copying and ad-hoc signs the copied bundles for local host scanning. A distribution candidate must retain its Developer ID signature and must not pass through this development installer. To preserve the already verified source signature during debugging:
 
 ```bash
-SYNTHIA_SKIP_ADHOC_SIGN=1 scripts/install-local-plugins.sh build-release
+SYNTHIA_SKIP_ADHOC_SIGN=1 scripts/install-local-plugins.sh build-release RelWithDebInfo RelWithDebInfo
 ```
 
 Run AU validation after install:
@@ -80,12 +77,6 @@ Do not delete broad `~/Library` folders or unrelated plugin folders. Move suspec
 
 Ad-hoc signing is enough for local development validation on this machine. It does not produce distributable, notarized artifacts.
 
-Distribution builds still need:
+The [release workflow](../BUILD_RELEASE.md) implements a separate distribution mode using an authorized existing Developer ID Application identity, team ID, and Keychain notary profile. It signs with secure timestamps and hardened runtime, requires accepted notarization, staples the app/final DMG, and assesses them. It fails if credentials are missing and never falls back to ad-hoc signing.
 
-- a Developer ID Application certificate,
-- hardened runtime options chosen for the final bundle shape,
-- notarization submission,
-- stapling where applicable,
-- final verification on a clean macOS account or machine.
-
-Those steps belong to release hardening after Ableton validation passes.
+Licensing/content decisions, current Ableton proof, native Intel/oldest-OS proof, clean-machine installation, and publication authorization remain explicit items in the [release checklist](../release/checklist.md). Local engineering does not require choosing public license terms.

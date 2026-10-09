@@ -61,6 +61,12 @@ enum class VoiceMode
     Unison = 3
 };
 
+enum class PortamentoMode
+{
+    Normal = 0,
+    Slide = 1
+};
+
 enum class RampMode
 {
     OneShot = 0,
@@ -88,14 +94,29 @@ enum class DelaySyncDivision
     Eighth = 1,
     DottedEighth = 2,
     Quarter = 3,
-    Half = 4
+    Half = 4,
+    ThirtySecond = 5,
+    ThirtySecondTriplet = 6,
+    DottedThirtySecond = 7,
+    SixteenthTriplet = 8,
+    DottedSixteenth = 9,
+    EighthTriplet = 10,
+    QuarterTriplet = 11,
+    DottedQuarter = 12,
+    HalfTriplet = 13,
+    DottedHalf = 14,
+    Whole = 15,
+    WholeTriplet = 16,
+    DottedWhole = 17
 };
 
 enum class DistortionMode
 {
     Soft = 0,
     Clip = 1,
-    Fold = 2
+    Fold = 2,
+    Decimate = 3,
+    Bitcrush = 4
 };
 
 enum class ArpMode
@@ -103,7 +124,22 @@ enum class ArpMode
     Up = 0,
     Down = 1,
     UpDown = 2,
-    AsPlayed = 3
+    AsPlayed = 3,
+    DownUp = 4,
+    UpDownRepeat = 5,
+    DownUpRepeat = 6,
+    Random = 7,
+    StepSequence = 8,
+    StepChord = 9
+};
+
+enum class ArpVelocityMode
+{
+    Step = 0,
+    Key = 1,
+    Hold = 2,
+    StepKey = 3,
+    StepHold = 4
 };
 
 enum class ArpRateDivision
@@ -112,7 +148,20 @@ enum class ArpRateDivision
     Sixteenth = 1,
     Eighth = 2,
     Quarter = 3,
-    Half = 4
+    Half = 4,
+    DottedEighth = 5,
+    ThirtySecondTriplet = 6,
+    DottedThirtySecond = 7,
+    SixteenthTriplet = 8,
+    DottedSixteenth = 9,
+    EighthTriplet = 10,
+    QuarterTriplet = 11,
+    DottedQuarter = 12,
+    HalfTriplet = 13,
+    DottedHalf = 14,
+    Whole = 15,
+    WholeTriplet = 16,
+    DottedWhole = 17
 };
 
 enum class OscillatorSlotWaveform
@@ -120,7 +169,11 @@ enum class OscillatorSlotWaveform
     Saw = 0,
     Pulse = 1,
     Noise = 2,
-    Sub = 3
+    Sine = 3,
+    Triangle = 4,
+    SawTriangle = 5,
+    HalfPulse = 6,
+    QuarterPulse = 7
 };
 
 enum class ModSource
@@ -144,7 +197,11 @@ enum class ModSource
     Macro1 = 16,
     Macro2 = 17,
     Macro3 = 18,
-    Macro4 = 19
+    Macro4 = 19,
+    ModEnv2 = 20,
+    Lfo2 = 21,
+    AmpEnv2 = 22,
+    StepVelocity = 23
 };
 
 inline constexpr int transModSlotCount = 8;
@@ -194,53 +251,19 @@ struct OscillatorParameters
 
 struct LayerOscillatorParameters
 {
-    bool enabled = false;
+    bool enabled = true;
     int voices = 0;
     OscillatorSlotWaveform waveform = OscillatorSlotWaveform::Saw;
     int octave = 0;
     int note = 0;
     float fineCents = 0.0f;
-    float level = 0.0f;
+    float level = 1.0f;
     float phaseDegrees = 0.0f;
     float detune = 0.0f;
     float stereo = 0.0f;
     float pan = 0.0f;
     bool retrigger = true;
     bool invert = false;
-};
-
-struct LayerParameters
-{
-    bool enabled = false;
-    float levelDb = 0.0f;
-    float pan = 0.0f;
-    bool solo = false;
-    bool mute = false;
-    std::array<LayerOscillatorParameters, oscillatorSlotsPerLayer> oscillators {};
-};
-
-struct PreparedOscillatorSlotParameters
-{
-    bool legacy = false;
-    bool sawStackOnly = false;
-    int layerIndex = 0;
-    int oscillatorIndex = 0;
-    int oscillatorStateIndex = 0;
-    OscillatorParameters oscillator;
-    float sawStackGain = 0.0f;
-    float gain = 0.0f;
-    float pan = 0.0f;
-    float stereo = 0.0f;
-    float panWeight = 0.0f;
-    float weightedPanBase = 0.0f;
-    bool invert = false;
-};
-
-struct PreparedOscillatorRenderParameters
-{
-    std::array<PreparedOscillatorSlotParameters, preparedOscillatorSlotCount> activeSlots {};
-    int activeSlotCount = 0;
-    bool cacheValid = false;
 };
 
 struct FilterParameters
@@ -250,8 +273,46 @@ struct FilterParameters
     float cutoffSemitones = 96.0f;
     float resonance = 0.0f;
     float drive = 0.0f;
-    float keytrack = 0.5f;
+    float keytrack = 0.0f;
     int oversampling = 0;
+    bool warmDrive = false;
+    bool selfOscillation = false;
+    bool nativeTopology = false;
+};
+
+enum class FilterInput
+{
+    None = 0,
+    A = 1,
+    B = 2,
+    AB = 3
+};
+
+struct FilterControlParameters
+{
+    bool warmDrive = true;
+    float cutoffSemitones = 0.0f;
+    float resonance = 0.0f;
+    float keytrack = 0.0f;
+    float drive = 0.0f;
+};
+
+struct MasterParameters
+{
+    float levelDb = 0.0f;
+};
+
+struct LayerParameters
+{
+    bool enabled = true;
+    float levelDb = 0.0f;
+    float pan = 0.0f;
+    bool solo = false;
+    bool mute = false;
+    std::array<LayerOscillatorParameters, oscillatorSlotsPerLayer> oscillators {};
+    FilterParameters filter;
+    EnvelopeParameters ampEnv;
+    FilterInput input = FilterInput::A;
 };
 
 struct AmpParameters
@@ -289,6 +350,9 @@ struct LfoParameters
     float swing = 0.0f;
     int stepCount = 8;
     float stepSmooth = 0.0f;
+    float gain = 1.0f;
+    float offset = 0.0f;
+    bool free = false;
     std::array<float, lfoStepSlotCount> steps = [] {
         std::array<float, lfoStepSlotCount> values {};
         for (int i = 0; i < lfoStepSlotCount; ++i)
@@ -307,8 +371,8 @@ struct MacroParameters
 
 struct FxParameters
 {
-    bool enabled = false;
-    bool saturationEnabled = true;
+    bool enabled = true;
+    bool saturationEnabled = false;
     DistortionMode distortionMode = DistortionMode::Soft;
     float saturationMix = 0.0f;
     float saturationDrive = 0.35f;
@@ -317,11 +381,11 @@ struct FxParameters
     float phaserRateHz = 0.25f;
     float phaserDepth = 0.45f;
     float phaserFeedback = 0.15f;
-    bool delayEnabled = true;
+    bool delayEnabled = false;
     float delayMix = 0.0f;
     DelaySyncDivision delaySyncDivision = DelaySyncDivision::Eighth;
     float delayFeedback = 0.22f;
-    bool reverbEnabled = true;
+    bool reverbEnabled = false;
     float reverbMix = 0.0f;
     float reverbDecay = 0.35f;
     bool chorusEnabled = false;
@@ -336,6 +400,34 @@ struct FxParameters
     float compressorRatio = 2.0f;
     float compressorMakeupDb = 0.0f;
     float compressorMix = 0.0f;
+    DelaySyncDivision phaserSyncDivision = DelaySyncDivision::Whole;
+    DelaySyncDivision chorusSyncDivision = DelaySyncDivision::Whole;
+    float phaserCenterHz = 1000.0f;
+    float phaserCenterOffsetHz = 0.0f;
+    float phaserSpread = 0.5f;
+    float phaserLrOffset = 0.25f;
+    float phaserWidth = 1.0f;
+    float chorusDelayMs = 11.0f;
+    float chorusFeedback = 0.0f;
+    bool chorusDualMode = false;
+    float chorusWidth = 1.0f;
+    float eqLowFrequencyHz = 160.0f;
+    float eqHighFrequencyHz = 6000.0f;
+    bool delaySync = true;
+    float delayTimeLeftMs = 250.0f;
+    float delayTimeRightMs = 250.0f;
+    DelaySyncDivision delayRightSyncDivision = DelaySyncDivision::Eighth;
+    bool delayPingPong = true;
+    float delaySpread = 1.0f;
+    float delayWidth = 1.0f;
+    float delayLowCutHz = 20.0f;
+    float delayHighCutHz = 20000.0f;
+    float delaySmear = 0.0f;
+    float reverbPreDelayMs = 0.0f;
+    float reverbDamp = 0.48f;
+    float reverbWidth = 1.0f;
+    float compressorAttackMs = 4.0f;
+    float compressorReleaseMs = 80.0f;
 };
 
 struct QualityParameters
@@ -374,6 +466,10 @@ struct ArpParameters
     float swing = 0.0f;
     int stepCount = arpStepCount;
     std::array<ArpStepParameters, arpStepCount> steps {};
+    int wrap = 0;
+    bool sync = true;
+    float timeMs = 125.0f;
+    ArpVelocityMode velocityMode = ArpVelocityMode::StepKey;
 };
 
 struct ChordVoiceParameters
@@ -399,6 +495,51 @@ struct ChordParameters
     };
 };
 
+enum class NativeModDestination
+{
+    OscA1Pitch,
+    OscA1Level,
+    OscA1Pan,
+    OscA1Detune,
+    OscA1Phase,
+    OscA2Pitch,
+    OscA2Level,
+    OscA2Pan,
+    OscA2Detune,
+    OscA2Phase,
+    OscB1Pitch,
+    OscB1Level,
+    OscB1Pan,
+    OscB1Detune,
+    OscB1Phase,
+    OscB2Pitch,
+    OscB2Level,
+    OscB2Pan,
+    OscB2Detune,
+    OscB2Phase,
+    FilterACutoff,
+    FilterAResonance,
+    FilterADrive,
+    FilterBCutoff,
+    FilterBResonance,
+    FilterBDrive,
+    LayerALevel,
+    LayerAPan,
+    LayerBLevel,
+    LayerBPan,
+    Lfo1Rate,
+    Lfo1Gain,
+    Lfo1Offset,
+    Lfo2Rate,
+    Lfo2Gain,
+    Lfo2Offset,
+    PhaserCenterFrequency,
+    FilterResonanceAB,
+    Count
+};
+
+inline constexpr int nativeModDestinationCount = static_cast<int>(NativeModDestination::Count);
+
 struct TransModSlotParameters
 {
     bool enabled = false;
@@ -410,6 +551,7 @@ struct TransModSlotParameters
     float filterCutoffSemitones = 0.0f;
     float ampLevelDb = 0.0f;
     float pan = 0.0f;
+    std::array<float, nativeModDestinationCount> nativeDepths {};
 };
 
 struct TransModParameters
@@ -425,10 +567,14 @@ struct PerformanceState
     float pitchBend = 0.0f;
     float modWheel = 0.0f;
     float aftertouch = 0.0f;
+    float stepVelocity = 1.0f;
 };
 
 struct SynthParameters
 {
+    bool sync = false;
+    PortamentoMode portamentoMode = PortamentoMode::Normal;
+    float pitchBendRange = 2.0f;
     VoiceMode voiceMode = VoiceMode::Poly;
     int polyphony = 8;
     int unisonCount = 1;
@@ -456,14 +602,13 @@ struct SynthParameters
                     0.0f,
                     0.0f,
                     true,
-                    false
-                },
-                LayerOscillatorParameters {}
-            }
-        },
-        LayerParameters {}
+                    false },
+                LayerOscillatorParameters {} },
+            FilterParameters {},
+            EnvelopeParameters {},
+            FilterInput::A },
+        [] { LayerParameters part; part.input = FilterInput::B; return part; }()
     };
-    PreparedOscillatorRenderParameters oscillatorRender;
     OscillatorParameters osc;
     FilterParameters filter;
     AmpParameters amp;
@@ -471,6 +616,10 @@ struct SynthParameters
     EnvelopeParameters modEnv { 1.0f, 400.0f, 0.0f, 160.0f };
     DirectModParameters direct;
     LfoParameters lfo;
+    LfoParameters lfo2;
+    EnvelopeParameters modEnv2 { 1.0f, 400.0f, 0.0f, 160.0f };
+    FilterControlParameters filterControl;
+    MasterParameters master;
     RampParameters ramp;
     ArpParameters arp;
     ChordParameters chord;
@@ -653,14 +802,9 @@ inline float midiNoteToHz(float midiNote) noexcept
         * fraction;
 }
 
-inline bool isLegacyCompatibilityOscillatorSlot(int layerIndex, int oscillatorIndex) noexcept
-{
-    return layerIndex == 0 && oscillatorIndex == 0;
-}
-
 inline int oscillatorSlotVoiceCost(const LayerOscillatorParameters& oscillator, int renderedVoiceCount) noexcept
 {
-    return oscillator.enabled && oscillator.voices > 0 && oscillator.level > 0.0f
+    return oscillator.voices > 0 && oscillator.level > 0.0f
         ? std::clamp(renderedVoiceCount, 0, 8)
         : 0;
 }
@@ -672,7 +816,7 @@ inline int oscillatorSlotVoiceCost(const LayerOscillatorParameters& oscillator) 
 
 inline int layerVoiceCost(const LayerParameters& layer) noexcept
 {
-    if (!layer.enabled || layer.mute)
+    if (layer.mute)
         return 0;
 
     auto voices = 0;
@@ -688,17 +832,14 @@ inline int layerVoiceCost(const SynthParameters& parameters, int layerIndex) noe
         return 0;
 
     const auto& layer = parameters.layers[static_cast<std::size_t>(layerIndex)];
-    if (!layer.enabled || layer.mute)
+    if (layer.mute)
         return 0;
 
     auto voices = 0;
     for (int oscillatorIndex = 0; oscillatorIndex < oscillatorSlotsPerLayer; ++oscillatorIndex)
     {
         const auto& oscillator = layer.oscillators[static_cast<std::size_t>(oscillatorIndex)];
-        const auto renderedVoices = isLegacyCompatibilityOscillatorSlot(layerIndex, oscillatorIndex)
-            ? parameters.osc.stackCount
-            : oscillator.voices;
-        voices += oscillatorSlotVoiceCost(oscillator, renderedVoices);
+        voices += oscillatorSlotVoiceCost(oscillator);
     }
 
     return voices;
@@ -708,7 +849,7 @@ inline int layerOscillatorVoiceCost(const SynthParameters& parameters) noexcept
 {
     auto hasSolo = false;
     for (const auto& layer : parameters.layers)
-        hasSolo = hasSolo || (layer.enabled && layer.solo);
+        hasSolo = hasSolo || layer.solo;
 
     auto voices = 0;
     for (int layerIndex = 0; layerIndex < layerCount; ++layerIndex)
@@ -759,12 +900,12 @@ inline int patchCostActiveFxModules(const FxParameters& fx) noexcept
         return 0;
 
     return (fx.saturationEnabled ? 1 : 0)
-         + (fx.phaserEnabled ? 1 : 0)
-         + (fx.chorusEnabled ? 1 : 0)
-         + (fx.delayEnabled ? 1 : 0)
-         + (fx.reverbEnabled ? 1 : 0)
-         + (fx.eqEnabled ? 1 : 0)
-         + (fx.compressorEnabled ? 1 : 0);
+        + (fx.phaserEnabled ? 1 : 0)
+        + (fx.chorusEnabled ? 1 : 0)
+        + (fx.delayEnabled ? 1 : 0)
+        + (fx.reverbEnabled ? 1 : 0)
+        + (fx.eqEnabled ? 1 : 0)
+        + (fx.compressorEnabled ? 1 : 0);
 }
 
 inline PatchCostEstimate estimatePatchCost(const SynthParameters& parameters) noexcept

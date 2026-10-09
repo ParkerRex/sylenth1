@@ -12,14 +12,14 @@ constexpr float twoPi = 6.28318530717958647692f;
 
 void Lfo::prepare(double newSampleRate) noexcept
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
     updatePhaseIncrement();
     resetPhase();
 }
 
 void Lfo::setRateHz(float newRateHz) noexcept
 {
-    const auto clampedRate = std::clamp(newRateHz, 0.01f, 40.0f);
+    const auto clampedRate = std::isfinite(newRateHz) ? std::clamp(newRateHz, 0.01f, 100.0f) : 0.01f;
     if (std::abs(clampedRate - rateHz) <= 0.000001f)
         return;
 
@@ -51,7 +51,10 @@ void Lfo::setSteps(const float* stepValues, int count, float smooth) noexcept
 
 void Lfo::setPhaseDegrees(float degrees) noexcept
 {
-    const auto newPhaseOffset = std::fmod(std::max(0.0f, degrees) / 360.0f, 1.0f);
+    degrees = std::isfinite(degrees) ? std::clamp(degrees, 0.0f, 360.0f) : 0.0f;
+    if (cachedPhaseDegrees == degrees) return;
+    cachedPhaseDegrees = degrees;
+    const auto newPhaseOffset = degrees >= 360.0f ? 0.0f : degrees / 360.0f;
     if (std::abs(newPhaseOffset - phaseOffset) <= 0.000001f)
         return;
 
@@ -61,6 +64,12 @@ void Lfo::setPhaseDegrees(float degrees) noexcept
 void Lfo::resetPhase() noexcept
 {
     phase = phaseOffset;
+    value = valueForPhase(phase);
+}
+
+void Lfo::setNormalizedPhase(float normalizedPhase) noexcept
+{
+    phase = std::isfinite(normalizedPhase) ? normalizedPhase - std::floor(normalizedPhase) : 0.0f;
     value = valueForPhase(phase);
 }
 
@@ -77,6 +86,11 @@ float Lfo::process() noexcept
         heldRandom = (static_cast<float>((randomState >> 8) & 0x00ffffffu) / 8388607.5f) - 1.0f;
     }
 
+    if (shape == LfoShape::Noise)
+    {
+        randomState = randomState * 1664525u + 1013904223u;
+        heldRandom = (static_cast<float>((randomState >> 8) & 0x00ffffffu) / 8388607.5f) - 1.0f;
+    }
     value = valueForPhase(phase);
     return value;
 }
@@ -98,9 +112,9 @@ float Lfo::valueForPhase(float phaseValue) noexcept
         case LfoShape::Square:
             return phaseValue < 0.5f ? 1.0f : -1.0f;
         case LfoShape::SampleHold:
+        case LfoShape::Noise:
             return heldRandom;
-        case LfoShape::Step:
-        {
+        case LfoShape::Step: {
             const auto count = static_cast<float>(stepCount);
             const auto position = phaseValue * count;
             const auto index = std::min(static_cast<int>(position), stepCount - 1);

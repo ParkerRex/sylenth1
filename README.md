@@ -1,226 +1,68 @@
-# synthia
+# Synthia
 
-![synthia lab software instrument hero](docs/assets/readme-hero.png)
+Synthia is a native macOS software instrument built with C++20, JUCE, and CMake. The active release recreates the classic Sylenth1 control layout and documented instrument behavior as AU, VST3, and a standalone application.
 
-synthia is a lab-built macOS software instrument project. The product goal is to rebuild everyone's favorite vintage VST, Sylenth1, optimized for today's macOS/Ableton workflow, then extend that foundation with AI-assisted sound design and conversational editing.
+The October 2026 rebuild replaces the modern dark interface and shared sound path with a classic one-screen editor and independent stereo parts. Old Synthia patch compatibility is explicitly out of scope. Browser/Wasm, AI generation, and conversational editing are deferred.
 
-## Product Roadmap
+## Release status
 
-Phase 1: recreate the Sylenth experience. The first milestone is a modern AU/VST3 instrument with Sylenth-level immediacy: A/B architecture, fast oscillator/filter/envelope/modulation access, a strong preset workflow, arpeggiator/effects coverage, and Ableton validation. The manual in `Sylenth1Manual.pdf`, the screenshot corpus in `research/sylenth1-screenshots/`, and `docs/modern-synthia-baseline.md` drive product decisions for this phase.
+Implementation and integrated validation are in progress. This is not yet a qualified public release. Source-owned DSP and drawn controls do not establish byte-identical audio or pixel-identical rendering of a third-party product. Read [the conformance record](docs/CLASSIC_PARITY.md) for measured results and missing original-reference evidence.
 
-Phase 2: add AI-assisted sound and arpeggio creation. The plugin should be able to randomize and generate useful sounds, chord movement, and arpeggio ideas with the musical intent of tools like Xfer Records' Cthulhu, while keeping all generated state as normal editable presets and parameters.
+The current contract is [SPEC.md](SPEC.md); execution progress is recorded in [the native rebuild plan](docs/exec-plans/active/2026-10-09-complete-classic-native-rebuild.md).
 
-Phase 3: make the VST conversational. Users should be able to ask for changes in plain language, for example "make the bass wubbier," or provide a reference sound and ask synthia to recreate the character with editable synth, modulation, arp, and FX settings.
+## Instrument
 
-## Current State
+- Two independent stereo parts with four equivalent oscillators, per-part filters and amp envelopes, filter input routing, shared filter controls, and a post-effects master level.
+- Two modulation envelopes, two LFOs, miscellaneous sources, and editable modulation destinations.
+- A step arpeggiator, distortion, phaser, chorus, EQ, reverb, delay, and compressor.
+- Four sub-banks of 128 programs, program editing, owned preset/bank files, MIDI program changes, and self-contained host state.
+- A fixed 908 x 591 logical classic canvas with Part A/B switching, central arp/effect pages, onscreen keyboard, pitch/modulation wheels, and per-control MIDI Learn/Forget.
 
-The repo builds a JUCE/CMake instrument scaffold with:
+These describe the implemented target surfaces. Refer to validation evidence before assuming every original-product behavior has been reproduced exactly.
 
-- AU, VST3, and standalone targets.
-- A dry-core DSP path with oscillator, filter, envelopes, LFO, ramp, glide, velocity glide, amp drive, pan/spread, and performance MIDI sources.
-- A bypassable post-voice FX path with saturation, tempo-synced delay, simple reverb, chorus, and realtime/offline quality settings.
-- An 8-slot TransMod-style modulation layer with source/scaler routing and physical destination depths.
-- A Phase 1 A/B layer and four oscillator-slot backbone in host/preset state; Layer A maps to the current sound path and Layer B is valid but disabled by default.
-- Factory presets, preset schema validation, MIDI fixture rendering, and JSON report generation.
-- A modern flat dark control surface (shown in the hero above) that keeps the Sylenth workflow density but drops the vintage skin: functional-zone colour coding (source cyan, shaping amber, performance blue, modulation magenta), knobs with lit value arcs, a performance strip with polyphony/voices, Part A/B selection, and preset navigation; oscillator modules (a PITCH sub-box plus a VOLUME/PHASE/DETUNE/STEREO/PAN knob row and an INV/WAVE/VOICES/RETRIG row); a bespoke filter module, vertical ADSR amp/mod envelopes, voice/amp/ramp/macros, and an arp/step/chord grid around a glass centre display that reports the live preset, program slot, dirty state, voice/CPU diagnostics, a live output scope, and echoes any touched control as "name = value".
-- Serum/Massive-inspired modulation UX on the existing TransMod engine: a draggable MOD SOURCES chip strip routes any catalog source onto destination knobs (osc pitch, pulse width, filter cutoff, amp level, pan) by drag-and-drop, writing ordinary `transmod.*` slot state; routed knobs show halo rings covering the modulated range with a live dot for LFO routes, alt-drag edits depth, right-click clears the slot.
-- A visual LFO module whose Step shape is a drawable 16-bar grid (`lfo.step.*` parameters with step count and smoothing) with a live playhead — the stepper workflow, with `BA - Wub Stepper 01` as its first factory patch.
-- Sound, Modulation (read-only route overview plus eight TransMod slots), Effects (fixed-order FX rack), and Browser pages, the last presenting the preset/program workflow as one workspace: factory/user load-save-duplicate, visible invalid-preset browser errors, dirty/init/randomize/reset and A/B compare, metadata-aware Save New/Overwrite safe-save, and a global MIDI Learn surface. Every control binds to a real APVTS parameter; no DSP, parameters, or fake controls were added for the UI.
-- Preset workflow model support for metadata-aware writes, no-clobber create-only safe-save checks, dirty-state baseline fingerprints, and local A/B compare slot state.
-- Core validation for oscillator/filter behavior, modulation routing, voice allocation, dry/wet renders, standalone realtime/offline quality comparison, render determinism, preset loading, and APVTS automation exposure.
+## Build and validate
 
-Phase 1 host validation in Ableton is underway: current proof covers AU/VST3 scan-load-play smoke, current VST3 rescan/create/play, AU/VST3 Live-set state restore, VST3 transport run/stop, VST3 offline bounce artifact creation, AU transport run/stop with the hosted AU editor visible, AU/VST3 hosted editor open/close/reopen while transport runs, VST3 learned-CC capture/persistence, VST3 continuous controller value application, VST3 host Forget/stepped controller playback, AU/VST3 all-notes-off/all-sound-off plus hosted Panic, AU seeded controller value application, AU in-editor MIDI Learn capture/persistence, AU global-panel MIDI Forget, AU/VST3 sample-rate/buffer change handling, AU/VST3 hosted `Arp Motion 01` preset editor-state proof, AU/VST3 playback after preset load, AU/VST3 parameter automation record/playback, Ableton offline-versus-realtime content comparison with negative controls, standalone rendered modulation route write/clear proof, and standalone realtime/offline quality comparison. No non-UI Phase 1 host-matrix gap remains open; Ableton audio-diff modulation comparison and strict offline/realtime waveform equivalence are not claimed.
-
-## Build
-
-Configure:
-
-```bash
-cmake -S . -B build -DSYNTHIA_ENABLE_TESTS=ON
+```sh
+cmake -S . -B build -DSYNTHIA_ENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug -j 6
+ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Build:
+The default configure fetches pinned JUCE `8.0.13`. An existing checkout can be supplied using `-DSYNTHIA_JUCE_PATH=/absolute/path/to/JUCE`.
 
-```bash
-cmake --build build --config Debug
+Run the repository quality gate after changes:
+
+```sh
+CMAKE_BUILD_PARALLEL_LEVEL=6 scripts/check-quality.sh
 ```
 
-Run tests:
+Build outputs stay under the selected build directory. With a Debug configuration, plugin bundles are under `build/SynthiaPlugin_artefacts/Debug/{AU,VST3,Standalone}`. The executable is named `Synthia` with matching bundle capitalization.
 
-```bash
-ctest --test-dir build --output-on-failure
-```
+The build targets universal Apple Silicon/Intel binaries and an explicit macOS 11.0 deployment floor. This is a build target, not proof that every architecture/OS combination has been exercised.
 
-Build artifacts are written under:
+## Reference and host validation
 
-- `build/SynthiaPlugin_artefacts/Standalone/synthia.app`
-- `build/SynthiaPlugin_artefacts/AU/synthia.component`
-- `build/SynthiaPlugin_artefacts/VST3/synthia.vst3`
+[VALIDATION.md](docs/VALIDATION.md) documents standalone renders, current preset/program tests, image/audio comparison tools, and required Ableton checks. Original-reference comparisons must fail when required captures are missing. Self-comparisons do not prove original-plugin fidelity.
 
-The default build fetches JUCE `8.0.13`. Set `SYNTHIA_JUCE_PATH=/path/to/JUCE` during configure to use a local JUCE checkout. The previous `SYNTH_*` CMake options are still accepted as compatibility aliases.
+[Historical Ableton records](docs/host-validation/ableton-smoke.md) identify their specific earlier builds and environments. A changed candidate needs its own host proof.
 
-## Validation
+For headless editor captures, set `SYNTHIA_UI_SNAPSHOT` to an absolute PNG path and `SYNTHIA_UI_SNAPSHOT_QUIT=1`; see the validation document for Part A/B, LCD-page, and scale options.
 
-Run the default quality gate:
+## Packaging
 
-```bash
-scripts/check-quality.sh
-```
+[BUILD_RELEASE.md](docs/BUILD_RELEASE.md) describes developer and distribution modes. Developer packages are explicitly marked for testing. Distribution mode requires passing validation, Developer ID signing, notarization, and artifact verification; it does not publish to GitHub automatically.
 
-This runs repo whitespace checks, the realtime/type-safety C++ fitness gate, CMake configure with `compile_commands.json`, Debug build, CTest, and the standalone core render suite. The slower sweep commands are:
+The public release also needs the applicable project/JUCE licensing decision, reviewed shipped identity/assets, original-reference evidence for fidelity claims, and clean-machine installation/host coverage.
 
-```bash
-scripts/check-cpp-format.sh --all
-scripts/check-quality.sh --with-tidy
-```
+## Source map
 
-Use `--exclude <path>` on the sweep commands when another agent owns a file, for example the active UI editor files. See `docs/QUALITY.md` for sanitizer builds, formatting policy, clang-tidy, and realtime-safety rules.
+- `src/dsp/`, `src/voice/`: realtime sound engine and scheduling.
+- `src/plugin/`: host processor, parameter registry, and classic editor.
+- `src/modulation/`, `src/midi/`: routing and controller models.
+- `src/presets/`: current preset/program contracts.
+- `src/validation/`, `tests/`: rendering, behavior tests, and comparison-tool tests.
+- `presets/factory/`: source-owned factory presets.
+- `scripts/`: quality checks, reference comparisons, build/install/release tooling.
+- `docs/`: durable requirements, architecture, validation, and execution records.
 
-Run the full standalone core suite:
-
-```bash
-./build/SynthiaRender --suite core --output-dir build/reports/core
-```
-
-Focused validation commands:
-
-```bash
-./build/SynthiaRender --smoke --output build/reports/smoke.json
-./build/SynthiaRender --list-parameters --output build/reports/parameters.json
-./build/SynthiaRender --validate-presets presets/factory --output build/reports/presets.json
-./build/SynthiaRender --voice-test --output build/reports/voice-core.json
-./build/SynthiaRender --osc-test --notes C1,C3,C5,C7 --output build/reports/oscillator.json
-./build/SynthiaRender --filter-test --output build/reports/filter.json
-./build/SynthiaRender --modulation-test --fixture fixtures/midi/overlap-pluck.mid --output build/reports/modulation.json
-./build/SynthiaRender --modulation-route-render-test --fixture fixtures/midi/overlap-pluck.mid --output build/reports/modulation-route-render.json
-```
-
-Render the factory dry-core pluck:
-
-```bash
-./build/SynthiaRender \
-  --preset "presets/factory/Pluck/PL - Pluck Core 01.SynthiaPreset" \
-  --fixture fixtures/midi/overlap-pluck.mid \
-  --dry \
-  --output build/renders/pluck-core-01-dry.wav \
-  --report build/reports/pluck-core-01-dry.json
-```
-
-Render the factory wet pluck:
-
-```bash
-./build/SynthiaRender \
-  --preset "presets/factory/Pluck/PL - Pluck Core 01.SynthiaPreset" \
-  --fixture fixtures/midi/overlap-pluck.mid \
-  --wet \
-  --output build/renders/pluck-core-01-wet.wav \
-  --report build/reports/pluck-core-01-wet.json
-```
-
-Current core validation covers:
-
-- finite output and non-clipping dry renders,
-- oscillator tuning, pulse width, sub octave, stack detune, noise, and hard sync,
-- semitone-domain filter mapping and nonlinear filter stability,
-- ramp timing, glide, velocity glide, and mono/legato/unison allocation edge cases,
-- direct modulation and TransMod source/scaler/destination behavior,
-- modulation route write audio proof, including audible route creation and deterministic clear-to-baseline restore,
-- top-level preset `mod_slots` schema loading and strict depth validation,
-- FX bypass equivalence, tempo-synced delay at test tempo, FX tail reporting, wet render finite-output safety, and serialized realtime/offline quality settings,
-- deterministic render repeatability and LFO ablation metrics.
-
-## Developer Handoff
-
-Use this when continuing development on another Mac, especially one with Ableton installed.
-
-Clone the private repo:
-
-```bash
-git clone https://github.com/ParkerRex/synthia.git synthia
-cd synthia
-```
-
-Build and validate locally:
-
-```bash
-cmake -S . -B build -DSYNTHIA_ENABLE_TESTS=ON
-cmake --build build --config Debug
-ctest --test-dir build --output-on-failure
-./build/SynthiaRender --suite core --output-dir build/reports/core
-scripts/check-plugin-bundles.sh build
-```
-
-Install the locally built AU and VST3 into the per-user macOS plug-in folders:
-
-```bash
-scripts/install-local-plugins.sh build
-```
-
-Preview or remove the local install:
-
-```bash
-scripts/uninstall-local-plugins.sh --dry-run
-scripts/uninstall-local-plugins.sh
-```
-
-Local install and Ableton scan troubleshooting live in `docs/host-validation/local-install-troubleshooting.md`.
-
-Open the Ableton smoke template and record the environment before testing:
-
-```bash
-open docs/host-validation/ableton-smoke.md
-```
-
-Fill in:
-
-- date,
-- machine,
-- macOS version,
-- Ableton version,
-- repo commit from `git rev-parse --short HEAD`,
-- build directory, usually `build`,
-- sample rate,
-- buffer size,
-- plugin format tested: AU, VST3, or both.
-
-In Ableton:
-
-- Enable Audio Units and VST3 in Ableton's Plug-Ins settings.
-- Rescan plug-ins after running `scripts/install-local-plugins.sh build`.
-- Confirm `synthia` appears in the AU plug-in list.
-- Confirm `synthia` appears in the VST3 plug-in list.
-- Load the AU build on a MIDI track.
-- Load the VST3 build on a separate MIDI track.
-- Play `fixtures/midi/overlap-pluck.mid` or an equivalent overlapping-note pluck pattern.
-- Confirm both formats produce finite audible output.
-- Exercise mono, mono-legato, poly, unison, glide, velocity glide, ramp, and TransMod behavior.
-- Record and replay one parameter automation lane.
-- Save the Live set, close Ableton, reopen it, and confirm state restore.
-- Export a short bounce if playback and restore pass.
-
-If something fails, write it into `docs/host-validation/ableton-smoke.md` with:
-
-- plugin format,
-- exact step,
-- expected result,
-- actual result,
-- whether it reproduces,
-- Ableton log path or relevant message,
-- linked fix commit once fixed.
-
-## Repository Map
-
-- `SPEC.md`: durable product requirements.
-- `CONTEXT.md`: project vocabulary and decision lanes.
-- `docs/ARCHITECTURE.md`: implementation architecture.
-- `docs/VALIDATION.md`: validation strategy and report contract.
-- `docs/modern-synthia-baseline.md`: Phase 1 Sylenth rebuild baseline and roadmap.
-- `research/sylenth1-screenshots/SOURCE_INDEX.md`: traceable source map for the local Sylenth screenshot corpus.
-- `src/dsp/`: DSP engine, oscillator, filter, envelopes, LFO, ramp, FX, and parameters.
-- `src/voice/`: voice rendering and allocation.
-- `src/plugin/`: JUCE processor/editor and parameter registry.
-- `src/presets/`: preset schema validation.
-- `src/validation/`: standalone render and report CLI.
-- `tests/smoke/`: CTest smoke, contract, voice, and DSP coverage.
-- `presets/factory/`: factory presets.
-- `fixtures/`: MIDI and preset fixtures used by validation.
+The supplied Sylenth manual and screenshot collection are research references. They are not runtime resources or factory content.

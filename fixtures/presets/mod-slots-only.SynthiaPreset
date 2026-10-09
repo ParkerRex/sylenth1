@@ -20,7 +20,7 @@
     "render_mode": "dry"
   },
   "preset": {
-    "schema_version": 1,
+    "schema_version": 2,
     "plugin_min_version": "0.1.0",
     "id": "mod-slots-only",
     "display_name": "Mod Slots Only",
@@ -34,12 +34,10 @@
       "voice.mode": "Poly",
       "voice.polyphony": 2,
       "voice.unison_count": 1,
-      "osc.saw_level": 1.0,
-      "filter.enabled": false,
       "ramp.enabled": true,
       "ramp.rise_ms": 1.0,
       "macro.motion": 0.5,
-      "quality.realtime_mode": "Normal"
+      "layer.1.filter.enabled": false
     },
     "mod_slots": [
       {
@@ -48,8 +46,8 @@
         "source": "Ramp",
         "scaler": "Macro1",
         "depths": {
-          "filter.cutoff_semitones": 12.0,
-          "amp.pan": 0.25
+          "layer.1.filter.cutoff_semitones": 12.0,
+          "layer.1.pan": 0.25
         },
         "depth_domain": "Physical"
       }

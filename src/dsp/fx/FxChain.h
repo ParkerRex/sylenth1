@@ -16,6 +16,7 @@ struct FxStereoFrame
 float delayDivisionBeats(DelaySyncDivision division) noexcept;
 int tempoSyncedDelaySamples(double sampleRate, float tempoBpm, DelaySyncDivision division) noexcept;
 float tempoSyncedDelaySeconds(float tempoBpm, DelaySyncDivision division) noexcept;
+float tempoSyncedEffectRateHz(float tempoBpm, DelaySyncDivision division) noexcept;
 float fxTailLengthSeconds(const FxParameters& parameters) noexcept;
 float fxTailLengthSeconds(const SynthParameters& parameters) noexcept;
 
@@ -41,23 +42,47 @@ private:
         void write(float value) noexcept;
     };
 
-    FxStereoFrame processSaturation(FxStereoFrame input, const SynthParameters& parameters) const noexcept;
+    FxStereoFrame processSaturation(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processPhaser(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processChorus(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processEq(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processDelay(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processReverb(FxStereoFrame input, const SynthParameters& parameters) noexcept;
     FxStereoFrame processCompressor(FxStereoFrame input, const SynthParameters& parameters) noexcept;
-    float processPhaserChannel(float input,
-                               std::array<float, 4>& stages,
-                               float& feedback,
-                               float coefficient,
-                               float feedbackAmount) noexcept;
-    float processEqChannel(float input, float& lowState, float lowGainDb, float highGainDb) const noexcept;
     void resetPhaser() noexcept;
     void resetReverb() noexcept;
-    float processComb(int index, float input, float feedback, float damping) noexcept;
-    int reverbCombCount(QualityMode mode) const noexcept;
+    void resetChorus() noexcept;
+    void updateCompressorCoefficients(const FxParameters& parameters) noexcept;
+    FxStereoFrame processPhaser(FxStereoFrame input, const FxParameters& parameters) noexcept;
+    FxStereoFrame processChorus(FxStereoFrame input, const FxParameters& parameters) noexcept;
+    FxStereoFrame processEq(FxStereoFrame input, const FxParameters& parameters) noexcept;
+    FxStereoFrame processReverb(FxStereoFrame input, const FxParameters& parameters) noexcept;
+    static FxStereoFrame applyWidth(FxStereoFrame input, float width) noexcept;
+    float smooth(float target, float& state) const noexcept;
+    struct Biquad
+    {
+        std::array<float, 5> coefficients { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+        float firstState = 0.0f;
+        float secondState = 0.0f;
+        float process(float input) noexcept;
+        void reset() noexcept;
+        void setShelf(double sampleRate, float frequency, float gainDb, bool high) noexcept;
+        void setLowpass(double sampleRate, float frequency, float resonance) noexcept;
+    };
+
+    struct ReconstructionFilter
+    {
+        std::array<Biquad, 4> filters;
+        void prepare(double sampleRate, int factor) noexcept;
+        void reset() noexcept;
+        FxStereoFrame process(FxStereoFrame input) noexcept;
+    };
+    ReconstructionFilter distortionReconstruction;
+    ReconstructionFilter phaserReconstruction;
+    ReconstructionFilter chorusReconstruction;
+    FxStereoFrame previousPhaserInput;
+    FxStereoFrame previousChorusInput;
+    float eqNormalization = 1.0f;
 
     double sampleRate = 44100.0;
     int maxBlockSize = 512;
@@ -67,19 +92,48 @@ private:
     DelayBuffer chorusRight;
     std::array<DelayBuffer, 8> reverbCombs;
     std::array<float, 8> reverbDampingStates {};
-    std::array<float, 4> phaserStagesLeft {};
-    std::array<float, 4> phaserStagesRight {};
-    float phaserFeedbackLeft = 0.0f;
-    float phaserFeedbackRight = 0.0f;
     float phaserPhase = 0.0f;
     bool phaserWasActive = false;
-    float eqLowStateLeft = 0.0f;
-    float eqLowStateRight = 0.0f;
     float compressorEnvelope = 0.0f;
     float compressorAttackCoefficient = 0.0f;
     float compressorReleaseCoefficient = 0.0f;
     float chorusPhase = 0.0f;
     bool reverbWasActive = false;
-    int lastReverbCombCount = 0;
+    std::array<std::array<float, 6>, 2> phaserStages {};
+    FxStereoFrame phaserFeedback;
+    FxStereoFrame previousDistortionInput;
+    FxStereoFrame decimated;
+    int decimationCounter = 0;
+    DelayBuffer chorusSecondLeft;
+    DelayBuffer chorusSecondRight;
+    DelayBuffer reverbPreDelayLeft;
+    DelayBuffer reverbPreDelayRight;
+    std::array<DelayBuffer, 4> reverbDiffusers;
+    std::array<DelayBuffer, 2> delayDiffusers;
+    std::array<Biquad, 4> eqShelves;
+    std::array<float, 4> eqSettings { -1.0f, -1.0f, -100.0f, -100.0f };
+    FxStereoFrame delayLowState;
+    FxStereoFrame delayHighState;
+    float cachedDelayLowCut = -1.0f;
+    float cachedDelayHighCut = -1.0f;
+    float delayLowCoefficient = 0.0f;
+    float delayHighCoefficient = 1.0f;
+    float cachedAttackMs = -1.0f;
+    float cachedReleaseMs = -1.0f;
+    float smoothedDelayLeft = 0.0f;
+    float smoothedDelayRight = 0.0f;
+    float smoothingCoefficient = 0.0f;
+    std::array<float, 8> mixStates {};
+    bool controlsInitialized = false;
+    bool globalWasActive = false;
+    bool delayWasActive = false;
+    bool chorusWasActive = false;
+    std::array<std::array<float, 6>, 2> phaserFrequencyMultipliers {};
+    float cachedPhaserSpread = -1.0f;
+    float cachedPhaserOffset = -1.0f;
+    float smoothedPhaserCenter = 1000.0f;
+    float smoothedChorusDelay = 11.0f;
+    float smoothedReverbSize = 0.35f;
+    float smoothedReverbPreDelay = 0.0f;
 };
 } // namespace synth

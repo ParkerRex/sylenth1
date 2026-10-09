@@ -32,7 +32,8 @@ enum class ModulationDestination
     PulseWidth,
     FilterCutoff,
     AmpLevel,
-    Pan
+    Pan,
+    Native
 };
 
 struct ModulationSourceInfo
@@ -56,6 +57,7 @@ struct ModulationDestinationInfo
     std::string unit;
     float minimumDepth = -1.0f;
     float maximumDepth = 1.0f;
+    int nativeIndex = -1;
 };
 
 struct ModulationRouteSummary
@@ -103,6 +105,7 @@ struct ModulationRouteWriteRequest
     std::string scalerId = "none";
     std::string destinationId;
     float depth = 0.0f;
+    bool replaceExistingDestinations = true;
 };
 
 struct ModulationRouteWriteResult

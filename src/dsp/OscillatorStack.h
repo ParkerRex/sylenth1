@@ -23,6 +23,15 @@ public:
                              float analogPitchMod, const OscillatorParameters& parameters,
                              float outputGain, float* out, int numSamples) noexcept;
 
+    struct StereoSample
+    {
+        float left = 0.0f;
+        float right = 0.0f;
+    };
+    StereoSample renderNative(float midiNote, const LayerOscillatorParameters& parameters,
+                              float pitchModSemitones, float phaseModDegrees) noexcept;
+    void resetNativePhase(float normalizedPhase) noexcept;
+
     static float detuneOffsetCents(int index, int count, float detune) noexcept;
 
 private:
@@ -51,6 +60,11 @@ private:
     float cachedMaxFrequency = 0.0f;
     float cachedBaseFrequency = 0.0f;
     bool cachedBaseFrequencyValid = false;
+    std::array<float, maxStackCount> nativePanLeft {};
+    std::array<float, maxStackCount> nativePanRight {};
+    int cachedNativePanCount = -1;
+    float cachedNativePan = 0.0f;
+    float cachedNativeStereo = 0.0f;
     float subPhase = 0.0f;
     float syncMasterPhase = 0.0f;
     unsigned int noiseState = 0x76543210u;

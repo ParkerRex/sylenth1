@@ -36,13 +36,16 @@ public:
     void setParameters(const SynthParameters& newParameters) noexcept;
 
     RenderStats process(float* left, float* right, int numSamples) noexcept;
+    void advanceIdleModulators(int numSamples) noexcept;
 
     double getSampleRate() const noexcept { return sampleRate; }
     int getMaxBlockSize() const noexcept { return maxBlockSize; }
     int getActiveVoiceCount() const noexcept { return voices.activeVoiceCount(); }
+    bool hasPendingArpeggiatorEvents() const noexcept { return parameters.arp.enabled && arpeggiator.hasPendingEvents(); }
     const Voice* getVoice(int index) const noexcept { return voices.getVoice(index); }
     float getMonoLfoPhase() const noexcept { return voices.monoLfoPhase(); }
     float getMonoLfoValue() const noexcept { return voices.monoLfoValue(); }
+    float getMonoLfo2Phase() const noexcept { return voices.monoLfo2Phase(); }
 
 private:
     struct DirectChordOutputNote
@@ -72,6 +75,11 @@ private:
     void triggerDirectNotesFromInputNotes() noexcept;
     void resetVoicesForHeldInputRebuild() noexcept;
 
+    float masterCurrentGain = 1.0f;
+    float masterTargetGain = 1.0f;
+    int masterSmoothingSamples = 1;
+    int masterSmoothingRemaining = 0;
+    bool masterGainInitialized = false;
     double sampleRate = 44100.0;
     int maxBlockSize = 512;
     SynthParameters parameters;

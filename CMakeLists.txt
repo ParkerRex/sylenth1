@@ -4,6 +4,12 @@ if(APPLE AND (NOT DEFINED CMAKE_OSX_ARCHITECTURES OR CMAKE_OSX_ARCHITECTURES STR
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures" FORCE)
 endif()
 
+# A fixed deployment floor avoids inheriting the build machine's macOS version.
+# macOS 11 is the first native Apple Silicon release; both slices use this floor.
+if(APPLE AND (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL ""))
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum supported macOS version" FORCE)
+endif()
+
 project(Synthia
     VERSION 0.1.0
     DESCRIPTION "Synthia lab instrument"
@@ -142,6 +148,24 @@ target_compile_definitions(SynthiaRender
 
 if(SYNTHIA_ENABLE_TESTS)
     enable_testing()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+    add_executable(SynthiaNativeProcessorTest tests/smoke/NativeProcessorTest.cpp)
+    target_include_directories(SynthiaNativeProcessorTest
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+            $<TARGET_PROPERTY:SynthiaPlugin,JUCE_GENERATED_SOURCES_DIRECTORY>)
+    target_link_libraries(SynthiaNativeProcessorTest
+        PRIVATE
+            SynthiaPlugin
+            juce::juce_audio_utils
+            juce::juce_dsp)
+    add_test(NAME SynthiaNativeProcessorTest COMMAND SynthiaNativeProcessorTest)
+    set_tests_properties(SynthiaNativeProcessorTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_test(NAME SynthiaReferenceComparisonTest
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tools/ReferenceComparisonTest.py")
+    set_tests_properties(SynthiaReferenceComparisonTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_executable(SynthiaSmokeTest
         ${SYNTHIA_COMMON_SOURCES}
@@ -236,22 +260,22 @@ if(SYNTHIA_ENABLE_TESTS)
     set_tests_properties(SynthiaDspCoreTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(NAME SynthiaRenderCoreSuite
-        COMMAND SynthiaRender --suite core --output-dir build/reports/ctest-core)
+        COMMAND SynthiaRender --suite core --output-dir "${CMAKE_CURRENT_BINARY_DIR}/reports/ctest-core")
     set_tests_properties(SynthiaRenderCoreSuite PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(NAME SynthiaRandomizeRenderTest
-        COMMAND SynthiaRender --randomize-test --output build/reports/ctest-randomize.json)
+        COMMAND SynthiaRender --randomize-test --output "${CMAKE_CURRENT_BINARY_DIR}/reports/ctest-randomize.json")
     set_tests_properties(SynthiaRandomizeRenderTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(NAME SynthiaModulationRouteRenderTest
-        COMMAND SynthiaRender --modulation-route-render-test --output build/reports/ctest-modulation-route-render.json)
+        COMMAND SynthiaRender --modulation-route-render-test --output "${CMAKE_CURRENT_BINARY_DIR}/reports/ctest-modulation-route-render.json")
     set_tests_properties(SynthiaModulationRouteRenderTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(NAME SynthiaOfflineRealtimeCompareTest
-        COMMAND SynthiaRender --offline-realtime-compare-test --output build/reports/ctest-offline-realtime-compare.json)
+        COMMAND SynthiaRender --offline-realtime-compare-test --output "${CMAKE_CURRENT_BINARY_DIR}/reports/ctest-offline-realtime-compare.json")
     set_tests_properties(SynthiaOfflineRealtimeCompareTest PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     add_test(NAME SynthiaPatchRecreationSuite
-        COMMAND SynthiaRender --suite patch-recreation --output-dir build/reports/ctest-patch-recreation)
+        COMMAND SynthiaRender --suite patch-recreation --output-dir "${CMAKE_CURRENT_BINARY_DIR}/reports/ctest-patch-recreation")
     set_tests_properties(SynthiaPatchRecreationSuite PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

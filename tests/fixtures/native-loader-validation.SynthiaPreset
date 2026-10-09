@@ -1,0 +1,52 @@
+{
+  "fileType": "SynthiaPreset",
+  "presetName": "Native Loader Validation",
+  "presetAuthor": "Test",
+  "presetDescription": "Local state-loading behavior fixture. This is not an original Sylenth reference.",
+  "product": "Synthia",
+  "productVersion": "0.1.0",
+  "tags": [
+    "test",
+    "modulation"
+  ],
+  "vendor": "ParkerX",
+  "url": "https://parkerx.com/",
+  "version": 1,
+  "bank": "Fixtures",
+  "category": "Validation",
+  "preview": {
+    "type": "render_fixture",
+    "fixture": "fixtures/midi/overlap-pluck.mid",
+    "render_mode": "dry"
+  },
+  "preset": {
+    "schema_version": 2,
+    "plugin_min_version": "0.1.0",
+    "id": "native-loader-validation",
+    "display_name": "Native Loader Validation",
+    "author": "Test",
+    "description": "Local state-loading behavior fixture. This is not an original Sylenth reference.",
+    "tags": [
+      "test",
+      "modulation"
+    ],
+    "parameters": {
+      "layer.1.filter.enabled": false,
+      "layer.1.amp_env.attack_ms": 0.0,
+      "layer.1.amp_env.decay_ms": 1.0,
+      "layer.1.amp_env.sustain": 1.0,
+      "layer.1.osc.1.waveform": "Sine",
+      "layer.1.osc.1.octave": 1,
+      "master.level_db": -18.0,
+      "macro.motion": 1.0,
+      "transmod.8.source": "Macro1",
+      "transmod.8.route.1.destination": "A1 Pitch",
+      "transmod.8.route.1.amount": 0.25
+    },
+    "mod_slots": [],
+    "macros": [],
+    "metadata": {
+      "purpose": "Local parameter-loader behavior test; no external fidelity evidence"
+    }
+  }
+}

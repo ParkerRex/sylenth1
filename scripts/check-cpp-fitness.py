@@ -90,6 +90,10 @@ AUDIO_PERFORMANCE_RULES = (
 )
 
 HOT_AUDIO_FUNCTIONS = {
+    "src/dsp/Arpeggiator.cpp": (
+        "ArpGeneratedEvent Arpeggiator::processSample(",
+        "int Arpeggiator::stepDurationSamples(",
+    ),
     "src/dsp/Envelope.cpp": (
         "float Envelope::process()",
     ),
@@ -98,19 +102,28 @@ HOT_AUDIO_FUNCTIONS = {
         "float Filter::process(",
         "float Filter::cutoffSemitonesToHz(",
         "float Filter::processCore(",
+        "float Filter::processPrepared(float input, float midiNote, const FilterParameters& parameters,",
+        "void Filter::prepareBlock(const FilterParameters& filter)",
+        "float Filter::saturateStage(",
+        "void Filter::processStages(",
     ),
     "src/dsp/Lfo.cpp": (
         "float Lfo::process()",
+        "float Lfo::valueForPhase(",
+        "void Lfo::setNormalizedPhase(",
+        "void Lfo::setPhaseDegrees(",
     ),
     "src/dsp/OscillatorStack.cpp": (
         "float OscillatorStack::renderSample(float midiNote, const SynthParameters& parameters,",
         "float OscillatorStack::renderSample(float midiNote, const OscillatorParameters& osc,",
+        "OscillatorStack::StereoSample OscillatorStack::renderNative(",
     ),
     "src/dsp/Ramp.cpp": (
         "float Ramp::process(",
     ),
     "src/dsp/SynthEngine.cpp": (
         "RenderStats SynthEngine::process(",
+        "void SynthEngine::advanceIdleModulators(",
     ),
     "src/dsp/fx/FxChain.cpp": (
         "float saturate(",
@@ -124,8 +137,19 @@ HOT_AUDIO_FUNCTIONS = {
         "FxStereoFrame FxChain::processDelay(",
         "FxStereoFrame FxChain::processReverb(",
         "FxStereoFrame FxChain::processCompressor(",
-        "float FxChain::processEqChannel(",
-        "float FxChain::processComb(",
+        "FxStereoFrame FxChain::processPhaser(FxStereoFrame input, const FxParameters& parameters)",
+        "FxStereoFrame FxChain::processChorus(FxStereoFrame input, const FxParameters& parameters)",
+        "FxStereoFrame FxChain::processEq(FxStereoFrame input, const FxParameters& parameters)",
+        "FxStereoFrame FxChain::processReverb(FxStereoFrame input, const FxParameters& parameters)",
+        "void FxChain::updateCompressorCoefficients(",
+        "FxStereoFrame FxChain::ReconstructionFilter::process(",
+        "void FxChain::ReconstructionFilter::reset(",
+        "float FxChain::DelayBuffer::readInterpolated(",
+        "float FxChain::DelayBuffer::read(",
+        "void FxChain::DelayBuffer::write(",
+        "void FxChain::DelayBuffer::reset(",
+        "float FxChain::Biquad::process(",
+        "void FxChain::Biquad::setShelf(",
     ),
     "src/dsp/SynthParameters.h": (
         "inline float decibelsToGain(",
@@ -136,12 +160,19 @@ HOT_AUDIO_FUNCTIONS = {
     "src/voice/Voice.cpp": (
         "void Voice::process(",
         "StereoFrame Voice::renderSample(",
-        "Voice::LayerOscillatorMix Voice::renderLayerOscillators(",
+        "StereoFrame Voice::renderNative(",
+        "void Voice::syncModulatorConfig(",
+        "float Voice::processGlide(",
+        "float Voice::processVelocityGlide(",
         "Voice::ModulationSums Voice::evaluateTransMod(",
     ),
     "src/voice/VoiceAllocator.cpp": (
         "void VoiceAllocator::process(",
+        "void VoiceAllocator::advanceIdleModulators(",
         "StereoFrame VoiceAllocator::renderSample(",
+        "void VoiceAllocator::renderBlock(",
+        "void VoiceAllocator::syncMonoLfoConfig(",
+        "void VoiceAllocator::syncSecondMonoLfoConfig(",
     ),
 }
 
@@ -199,6 +230,15 @@ def allowed_audio_performance_violation(relative_path: str, rule_id: str, code: 
         return code.strip() in {
             "phase -= std::floor(phase);",
             "phaseValue -= std::floor(phaseValue);",
+            # Shared native LFO phase plus per-voice rate offset needs unit wrapping.
+            "phase = std::isfinite(normalizedPhase) ? normalizedPhase - std::floor(normalizedPhase) : 0.0f;",
+        }
+
+    if relative_path == "src/voice/Voice.cpp" and rule_id == "audio-perf/no-hot-rounding":
+        # Finite clamped rates accumulate a bounded per-voice phase offset.
+        return code.strip() in {
+            "nativeLfo1PhaseOffset -= std::floor(nativeLfo1PhaseOffset);",
+            "nativeLfo2PhaseOffset -= std::floor(nativeLfo2PhaseOffset);",
         }
 
     if relative_path == "src/dsp/OscillatorStack.cpp" and rule_id == "audio-perf/no-hot-rounding":
@@ -208,7 +248,35 @@ def allowed_audio_performance_violation(relative_path: str, rule_id: str, code: 
         return code.strip() in {
             "phaserPhase -= std::floor(phaserPhase);",
             "chorusPhase -= std::floor(chorusPhase);",
+            # A fractional delay tap interpolates its two adjacent stored samples.
+            "const auto floorDelay = static_cast<int>(std::floor(delaySamples));",
         }
+
+    if relative_path == "src/dsp/fx/FxChain.cpp" and rule_id == "audio-perf/no-hot-setup":
+        # DelayBuffer reset invalidates two counters, Biquad reset clears two
+        # floats, and reconstruction resets four Biquads. No storage clearing,
+        # allocation, resource construction or locks occur in these methods.
+        return code.strip() in {
+            "shelf.reset();", "filter.reset();", "delayLeft.reset();", "delayRight.reset();",
+            "diffuser.reset();", "chorusLeft.reset();", "chorusRight.reset();",
+            "chorusSecondLeft.reset();", "chorusSecondRight.reset();",
+        }
+
+    if relative_path == "src/dsp/fx/FxChain.cpp" and rule_id == "audio-perf/no-hot-pow-exp-log":
+        # These coefficient updates are guarded by changed cutoff/attack/release
+        # values from the block snapshot. They never depend on sample input.
+        return code.strip() in {
+            "delayLowCoefficient = 1.0f - std::exp(-twoPi * lowCut / static_cast<float>(sampleRate));",
+            "delayHighCoefficient = 1.0f - std::exp(-twoPi * highCut / static_cast<float>(sampleRate));",
+            "compressorAttackCoefficient = 1.0f - std::exp(-1.0f / (attack * 0.001f * static_cast<float>(sampleRate)));",
+            "compressorReleaseCoefficient = 1.0f - std::exp(-1.0f / (release * 0.001f * static_cast<float>(sampleRate)));",
+            # Biquad shelves are rebuilt only inside settings != eqSettings.
+            "const auto amplitude = std::pow(10.0f, gainDb / 40.0f);",
+        }
+
+    if relative_path == "src/dsp/fx/FxChain.cpp" and rule_id == "audio-perf/no-hot-sqrt":
+        # The same guarded shelf rebuild computes its fixed coefficient vector.
+        return code.strip() == "const auto beta = std::sin(omega) * std::sqrt(2.0f * amplitude);"
 
     return False
 
@@ -372,6 +440,7 @@ def main() -> int:
         "void SynthAudioProcessor::handleMidiMessage(",
         "void SynthAudioProcessor::handleMappedController(",
         "synth::RenderStats SynthAudioProcessor::renderSegment(",
+        "void SynthAudioProcessor::drainUiMidiMessages(",
     ):
         start_line, lines = extract_function_body(processor_path, signature)
         violations.extend(scan_extracted_lines(processor_path, start_line, lines))

@@ -17,17 +17,20 @@ float syncDivisionBeats(int division) noexcept
         case 3: return 1.0f;
         case 4: return 2.0f;
         case 5: return 4.0f;
+        case 6: return 1.0f / 12.0f;
+        case 7: return 0.1875f;
+        case 8: return 1.0f / 6.0f;
+        case 9: return 0.375f;
+        case 10: return 1.0f / 3.0f;
+        case 11: return 2.0f / 3.0f;
+        case 12: return 1.5f;
+        case 13: return 4.0f / 3.0f;
+        case 14: return 3.0f;
+        case 15: return 0.125f;
+        case 16: return 8.0f / 3.0f;
+        case 17: return 6.0f;
         default: return 1.0f;
     }
-}
-
-float effectiveLfoRateHz(const SynthParameters& parameters) noexcept
-{
-    if (parameters.lfo.rateMode == LfoRateMode::Hz)
-        return parameters.lfo.rateHz;
-
-    return std::clamp(parameters.tempoBpm, 20.0f, 300.0f)
-        / (60.0f * std::max(0.01f, syncDivisionBeats(parameters.lfo.syncDivision)));
 }
 
 int effectiveUnisonCount(const SynthParameters& parameters) noexcept
@@ -66,13 +69,14 @@ LfoShape toLfoShape(LfoShapeChoice choice) noexcept
 } // namespace
 
 VoiceAllocator::VoiceAllocator(int maxVoices)
-    : voices(static_cast<std::size_t>(std::max(1, maxVoices)))
+    : voices(static_cast<std::size_t>(std::clamp(maxVoices, 1, maxVoiceSlots)))
 {
 }
 
 void VoiceAllocator::prepare(double sampleRate)
 {
     monoLfo.prepare(sampleRate);
+    monoLfo2.prepare(sampleRate);
     monoLfo.setShape(LfoShape::SawDown);
     monoLfo.setRateHz(2.0f);
 
@@ -90,7 +94,7 @@ int VoiceAllocator::noteOn(int midiNote, float velocity, const SynthParameters& 
         return -1;
 
     const auto alreadyHeld = anyHeldNote();
-    const auto safeVelocity = std::clamp(velocity, 0.0f, 1.0f);
+    const auto safeVelocity = std::isfinite(velocity) ? std::clamp(velocity, 0.0f, 1.0f) : 0.0f;
     heldNotes[static_cast<std::size_t>(midiNote)] = true;
     heldVelocities[static_cast<std::size_t>(midiNote)] = safeVelocity;
     heldOrder[static_cast<std::size_t>(midiNote)] = ++noteOrderCounter;
@@ -101,10 +105,9 @@ int VoiceAllocator::noteOn(int midiNote, float velocity, const SynthParameters& 
     const auto monoMode = parameters.voiceMode == VoiceMode::Mono || parameters.voiceMode == VoiceMode::MonoLegato;
     const auto unisonCount = effectiveUnisonCount(parameters);
     const auto maxActiveVoices = effectiveVoiceLimit(parameters, static_cast<int>(voices.size()));
-    const auto allowGlide = parameters.voiceMode == VoiceMode::MonoLegato && alreadyHeld;
-    const auto retriggerModulators = !allowGlide
-        || parameters.voiceMode == VoiceMode::Mono
-        || parameters.retrigger;
+    const auto allowGlide = lastPlayedNote >= 0 && (alreadyHeld || parameters.portamentoMode == PortamentoMode::Slide);
+    const auto retriggerModulators = !(parameters.voiceMode == VoiceMode::MonoLegato && alreadyHeld);
+    const auto triggerOrder = ++voiceTriggerCounter;
     auto firstVoiceIndex = -1;
     std::array<bool, maxVoiceSlots> usedThisNote {};
 
@@ -121,7 +124,8 @@ int VoiceAllocator::noteOn(int midiNote, float velocity, const SynthParameters& 
         voice.setAllocationIndices(voiceIndex, maxActiveVoices, unison, unisonCount);
         voice.noteOn(midiNote, safeVelocity,
                      nextRandom(), unison, unisonCount, parameters,
-                     allowGlide, retriggerModulators);
+                     allowGlide, retriggerModulators, static_cast<float>(lastPlayedNote));
+        voiceTriggerOrders[static_cast<std::size_t>(voiceIndex)] = triggerOrder;
         markVoiceActive(voiceIndex);
         if (voiceIndex < static_cast<int>(usedThisNote.size()))
             usedThisNote[static_cast<std::size_t>(voiceIndex)] = true;
@@ -132,6 +136,7 @@ int VoiceAllocator::noteOn(int midiNote, float velocity, const SynthParameters& 
             break;
     }
 
+    lastPlayedNote = midiNote;
     return firstVoiceIndex;
 }
 
@@ -220,7 +225,9 @@ void VoiceAllocator::panic() noexcept
     for (auto& voice : voices)
         voice.reset();
     activeVoiceSlotCount = 0;
-    monoLfoConfigInitialized = false;
+    voiceTriggerOrders.fill(0);
+    voiceTriggerCounter = 0;
+    lastPlayedNote = -1;
 }
 
 void VoiceAllocator::stopAllWithFade(int fadeSamples) noexcept
@@ -291,20 +298,49 @@ void VoiceAllocator::process(int numSamples) noexcept
     }
 }
 
+void VoiceAllocator::advanceIdleModulators(int numSamples, const SynthParameters& parameters) noexcept
+{
+    if (numSamples <= 0 || activeVoiceCount() > 0) return;
+    const auto advanceFirst = parameters.lfo.free || parameters.lfo.mono
+        || parameters.lfo.gateMode == LfoGateMode::Mono || parameters.lfo.gateMode == LfoGateMode::Song;
+    const auto advanceSecond = parameters.lfo2.free || parameters.lfo2.mono
+        || parameters.lfo2.gateMode == LfoGateMode::Mono || parameters.lfo2.gateMode == LfoGateMode::Song;
+    if (!advanceFirst && !advanceSecond) return;
+    if (advanceFirst) syncMonoLfoConfig(parameters);
+    if (advanceSecond) syncSecondMonoLfoConfig(parameters);
+    for (int index = 0; index < numSamples; ++index)
+    {
+        if (advanceFirst) monoLfo.process();
+        if (advanceSecond) monoLfo2.process();
+    }
+}
+
 StereoFrame VoiceAllocator::renderSample(const SynthParameters& parameters) noexcept
 {
-    const auto useMonoLfo = parameters.lfo.mono
+    const auto useMonoLfo = parameters.lfo.free || parameters.lfo.mono
         || parameters.lfo.gateMode == LfoGateMode::Mono
         || parameters.lfo.gateMode == LfoGateMode::Song;
-    auto monoValue = 0.0f;
+    LfoFrame monoValue;
+    LfoFrame monoValue2;
+    const auto useMonoLfo2 = (parameters.lfo2.free || parameters.lfo2.mono
+                              || parameters.lfo2.gateMode == LfoGateMode::Mono || parameters.lfo2.gateMode == LfoGateMode::Song);
+    if (useMonoLfo2)
+    {
+        syncSecondMonoLfoConfig(parameters);
+        monoValue2.value = monoLfo2.process();
+        monoValue2.phase = monoLfo2.getPhase();
+    }
     if (useMonoLfo)
     {
         syncMonoLfoConfig(parameters);
-        monoValue = monoLfo.process();
+        monoValue.value = monoLfo.process();
+        monoValue.phase = monoLfo.getPhase();
     }
 
     StereoFrame frame;
     auto normalizationPower = 0.0f;
+    std::uint64_t selectedTriggerOrder = 0;
+    auto selectedUnisonIndex = maxVoiceSlots;
     for (int activeIndex = 0; activeIndex < activeVoiceSlotCount;)
     {
         const auto voiceIndex = activeVoiceIndices[static_cast<std::size_t>(activeIndex)];
@@ -322,7 +358,7 @@ StereoFrame VoiceAllocator::renderSample(const SynthParameters& parameters) noex
         }
 
         normalizationPower += voice.isStopFading() ? voice.normalizationPowerWeight() : 1.0f;
-        const auto voiceFrame = voice.renderSample(parameters, useMonoLfo ? &monoValue : nullptr);
+        const auto voiceFrame = voice.renderSample(parameters, useMonoLfo ? &monoValue : nullptr, useMonoLfo2 ? &monoValue2 : nullptr);
         frame.left += voiceFrame.left;
         frame.right += voiceFrame.right;
 
@@ -332,6 +368,14 @@ StereoFrame VoiceAllocator::renderSample(const SynthParameters& parameters) noex
             continue;
         }
 
+        const auto triggerOrder = voiceTriggerOrders[static_cast<std::size_t>(voiceIndex)];
+        if (triggerOrder > selectedTriggerOrder
+            || (triggerOrder == selectedTriggerOrder && voice.getUnisonIndex() < selectedUnisonIndex))
+        {
+            selectedTriggerOrder = triggerOrder;
+            selectedUnisonIndex = voice.getUnisonIndex();
+            frame.phaserCenterOffsetHz = voiceFrame.phaserCenterOffsetHz;
+        }
         ++activeIndex;
     }
 
@@ -346,96 +390,39 @@ StereoFrame VoiceAllocator::renderSample(const SynthParameters& parameters) noex
 }
 
 void VoiceAllocator::renderBlock(const SynthParameters& parameters, float* outLeft, float* outRight,
-                                 int numSamples) noexcept
+                                 int numSamples, float* phaserCenterOffsetsHz) noexcept
 {
     numSamples = std::min(numSamples, renderBlockMaxSamples);
     if (numSamples <= 0)
         return;
 
-    const auto useMonoLfo = parameters.lfo.mono
-        || parameters.lfo.gateMode == LfoGateMode::Mono
-        || parameters.lfo.gateMode == LfoGateMode::Song;
-    float monoValues[renderBlockMaxSamples];
-    if (useMonoLfo)
+    for (int index = 0; index < numSamples; ++index)
     {
-        syncMonoLfoConfig(parameters);
-        for (int i = 0; i < numSamples; ++i)
-            monoValues[i] = monoLfo.process();
+        const auto frame = renderSample(parameters);
+        outLeft[index] = frame.left;
+        outRight[index] = frame.right;
+        if (phaserCenterOffsetsHz != nullptr) phaserCenterOffsetsHz[index] = frame.phaserCenterOffsetHz;
     }
+}
 
-    float weights[renderBlockMaxSamples];
-    for (int i = 0; i < numSamples; ++i)
-    {
-        outLeft[i] = 0.0f;
-        outRight[i] = 0.0f;
-        weights[i] = 0.0f;
-    }
-
-    for (int activeIndex = 0; activeIndex < activeVoiceSlotCount;)
-    {
-        const auto voiceIndex = activeVoiceIndices[static_cast<std::size_t>(activeIndex)];
-        if (voiceIndex < 0 || voiceIndex >= static_cast<int>(voices.size()))
-        {
-            removeActiveVoiceAt(activeIndex);
-            continue;
-        }
-
-        auto& voice = voices[static_cast<std::size_t>(voiceIndex)];
-        if (!voice.isActive())
-        {
-            removeActiveVoiceAt(activeIndex);
-            continue;
-        }
-
-        const auto stillActive = voice.renderBlock(parameters, outLeft, outRight, weights,
-                                                   useMonoLfo ? monoValues : nullptr, numSamples);
-        if (!stillActive)
-        {
-            removeActiveVoiceAt(activeIndex);
-            continue;
-        }
-
-        ++activeIndex;
-    }
-
-    for (int i = 0; i < numSamples; ++i)
-    {
-        if (weights[i] > 1.0f)
-        {
-            const auto compensation = inverseSqrtForWeight(weights[i]);
-            outLeft[i] *= compensation;
-            outRight[i] *= compensation;
-        }
-    }
+void VoiceAllocator::syncSecondMonoLfoConfig(const SynthParameters& parameters) noexcept
+{
+    const auto& settings = parameters.lfo2;
+    monoLfo2.setShape(settings.shape == LfoShapeChoice::Noise ? LfoShape::Noise : toLfoShape(settings.shape));
+    monoLfo2.setRateHz(settings.free || !parameters.sync ? settings.rateHz
+                                                         : parameters.tempoBpm / (60.0f * syncDivisionBeats(settings.syncDivision)));
+    monoLfo2.setPhaseDegrees(settings.phaseDegrees);
+    monoLfo2.setSteps(settings.steps.data(), settings.stepCount, settings.stepSmooth);
 }
 
 void VoiceAllocator::syncMonoLfoConfig(const SynthParameters& parameters) noexcept
 {
-    // Step-table edits skip the config gate so live tweaks never reset phase,
-    // mirroring Voice::syncModulatorConfig.
-    monoLfo.setSteps(parameters.lfo.steps.data(), parameters.lfo.stepCount, parameters.lfo.stepSmooth);
-
-    const auto lfoConfigChanged = !monoLfoConfigInitialized
-        || cachedMonoLfoShape != parameters.lfo.shape
-        || cachedMonoLfoRateMode != parameters.lfo.rateMode
-        || cachedMonoLfoSyncDivision != parameters.lfo.syncDivision
-        || std::abs(cachedMonoLfoRateHz - parameters.lfo.rateHz) > 0.000001f
-        || std::abs(cachedMonoLfoPhaseDegrees - parameters.lfo.phaseDegrees) > 0.000001f
-        || std::abs(cachedMonoTempoBpm - parameters.tempoBpm) > 0.000001f;
-
-    if (!lfoConfigChanged)
-        return;
-
-    monoLfo.setShape(toLfoShape(parameters.lfo.shape));
-    monoLfo.setRateHz(effectiveLfoRateHz(parameters));
+    monoLfo.setShape(parameters.lfo.shape == LfoShapeChoice::Noise ? LfoShape::Noise : toLfoShape(parameters.lfo.shape));
+    monoLfo.setRateHz(parameters.lfo.free || !parameters.sync
+                          ? parameters.lfo.rateHz
+                          : parameters.tempoBpm / (60.0f * syncDivisionBeats(parameters.lfo.syncDivision)));
     monoLfo.setPhaseDegrees(parameters.lfo.phaseDegrees);
-    cachedMonoLfoShape = parameters.lfo.shape;
-    cachedMonoLfoRateMode = parameters.lfo.rateMode;
-    cachedMonoLfoSyncDivision = parameters.lfo.syncDivision;
-    cachedMonoLfoRateHz = parameters.lfo.rateHz;
-    cachedMonoLfoPhaseDegrees = parameters.lfo.phaseDegrees;
-    cachedMonoTempoBpm = parameters.tempoBpm;
-    monoLfoConfigInitialized = true;
+    monoLfo.setSteps(parameters.lfo.steps.data(), parameters.lfo.stepCount, parameters.lfo.stepSmooth);
 }
 
 int VoiceAllocator::activeVoiceCount() const noexcept
@@ -758,11 +745,13 @@ bool VoiceAllocator::retargetActiveNote(int fromNote, int toNote, float velocity
         ? std::min(matchingCount, effectiveUnisonCount(parameters))
         : 1;
     const auto allocationTotal = parameters.voiceMode == VoiceMode::Unison ? unisonCount : 1;
-    const auto allowGlide = parameters.voiceMode == VoiceMode::MonoLegato;
-    const auto retriggerModulators = parameters.voiceMode == VoiceMode::Mono || parameters.retrigger;
+    const auto allowGlide = true;
+    const auto retriggerModulators = parameters.voiceMode != VoiceMode::MonoLegato;
+    const auto triggerOrder = ++voiceTriggerCounter;
     auto unison = 0;
-    for (auto& voice : voices)
+    for (std::size_t voiceIndex = 0; voiceIndex < voices.size(); ++voiceIndex)
     {
+        auto& voice = voices[voiceIndex];
         if (!voice.isActive() || voice.getMidiNote() != fromNote)
             continue;
 
@@ -770,6 +759,7 @@ bool VoiceAllocator::retargetActiveNote(int fromNote, int toNote, float velocity
         voice.noteOn(toNote, std::clamp(velocity, 0.0f, 1.0f),
                      nextRandom(), unison, unisonCount, parameters,
                      allowGlide, retriggerModulators);
+        voiceTriggerOrders[voiceIndex] = triggerOrder;
         ++unison;
         if (unison >= unisonCount)
             break;

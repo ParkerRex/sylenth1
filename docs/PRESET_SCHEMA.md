@@ -1,343 +1,106 @@
-# Preset Schema
+# Preset and Program State
 
-This document sketches the planned preset schema. `SPEC.md` remains the source of truth for required fields and behavior.
+`SPEC.md` owns the product requirements. This document defines the current native state and file formats. The instrument uses one architecture: four oscillator slots, independent A/B filters and amplitude envelopes, two modulation envelopes and two LFOs.
 
-## Format
+## Owned Formats
 
-Preset files use a JSON `.SynthiaPreset` envelope:
+A single patch uses `.SynthiaPreset`, a JSON envelope whose `fileType` is `SynthiaPreset`. The envelope carries `presetName`, `presetAuthor`, `presetDescription`, product/version/vendor fields, browser `bank`, `category`, `tags`, optional preview metadata, and a nested `preset` payload.
 
-- deterministic key order when written by tools,
-- human-inspectable,
-- versioned,
-- migratable,
-- no copied third-party data.
+The payload contains:
 
-The canonical and only supported preset extension is `.SynthiaPreset`.
+- `schema_version`: `2` for newly written patches.
+- `plugin_min_version`, `id`, `display_name`, `author`, `description`, `tags`.
+- `parameters`: registered parameter IDs with physical values; choices use their exact registered strings and switches use booleans.
+- `mod_slots`: optional physical or normalized advanced modulation depths.
+- `macros`: optional macro metadata.
+- `metadata`: optional authoring and browser information.
 
-Current factory presets:
+Unknown parameter IDs, invalid choices and out-of-range preset values are validation errors. There is no old-patch sound compatibility profile. Loading a valid patch starts from current registry defaults before applying its values, so omitted controls cannot inherit another patch's values.
 
-- `presets/factory/Init/Init.SynthiaPreset`
-- `presets/factory/Lead/LD - Supersaw Stack 01.SynthiaPreset`
-- `presets/factory/Lead/LD - Rolling Circuit.SynthiaPreset`
-- `presets/factory/Pluck/PL - Pluck Core 01.SynthiaPreset`
-- `presets/factory/Pluck/PL - Droplet Glass.SynthiaPreset`
-- `presets/factory/Pluck/PL - Room Shine.SynthiaPreset`
-- `presets/factory/Bass/BA - Bass Wub 01.SynthiaPreset`
-- `presets/factory/Bass/BA - OTT Saw Lift.SynthiaPreset`
-- `presets/factory/Bass/BA - Acid Thread.SynthiaPreset`
-- `presets/factory/Pad/PD - Pad Wide 01.SynthiaPreset`
-- `presets/factory/Pad/PD - Analog Silk Sweep.SynthiaPreset`
-- `presets/factory/Pad/PD - Cosmic Aura.SynthiaPreset`
-- `presets/factory/Pad/PD - Dark Space.SynthiaPreset`
-- `presets/factory/Arp/ARP - Arp Motion 01.SynthiaPreset`
-- `presets/factory/FX/FX - Space 01.SynthiaPreset`
-- `presets/factory/Synth/SY - Broken Tape Keys.SynthiaPreset`
-- `presets/factory/Synth/SY - Pixel Storm Poly.SynthiaPreset`
+Factory Init has an empty parameter map and therefore produces exactly the same sound state as the processor's Init command. The 18 owned factory patches use the native engine. They were authored around independent part filters/envelopes and visible modulation routes; their sound has changed from the previous shared-filter scaffold. They are not third-party factory presets and are not claimed to match a proprietary instrument's binary output.
 
-Factory patches are Synthia-native remixes authored from local reference library category/name targets. They do not embed third-party binary preset payloads.
-
-Current user preset location:
-
-- `~/Music/ParkerX/synthia/Presets`
-
-The preset browser scans only the current Synthia user preset location.
-
-The editor recursively scans factory presets from bundled plugin resources when running from an installed AU, VST3, or Standalone bundle, falling back to the source `presets/factory` directory for development tools. User presets are scanned from the user preset location. Factory presets are treated as read-only; editor Save As and Duplicate write schema-valid user `.SynthiaPreset` files.
-
-Current validation command:
-
-```bash
-./build/SynthiaRender --validate-presets presets/factory --output build/reports/presets.json
-```
-
-Current patch recreation command:
-
-```bash
-./build/SynthiaRender --suite patch-recreation --output-dir build/reports/patch-recreation
-```
-
-## Required Top-Level Fields
-
-`.SynthiaPreset` files carry a lightweight browser envelope:
-
-- `fileType`: `SynthiaPreset`.
-- `presetName`: display name.
-- `presetAuthor`: author name.
-- `presetDescription`: short description.
-- `product`: `Synthia`.
-- `productVersion`: plugin/project version.
-- `vendor`: vendor string.
-- `url`: vendor URL.
-- `version`: envelope schema version.
-- `bank`: browser bank.
-- `category`: browser category.
-- `tags`: browser-facing tag list.
-- `preview`: preview/audition metadata.
-- `preset`: the validated Synthia preset payload.
-
-The nested `preset` payload keeps the render-state contract:
-
-- `schema_version`: integer.
-- `plugin_min_version`: semantic version string.
-- `id`: stable lower-kebab-case preset ID.
-- `display_name`: shipped user-facing name.
-- `author`: string.
-- `description`: string.
-- `tags`: lowercase slug list.
-- `parameters`: map of parameter ID to value.
-- `mod_slots`: list of TransMod-style slot objects.
-- `macros`: list of macro objects.
-- `metadata`: optional object.
-
-User preset writes include `metadata.program = "synthia_lab_rebuild"` and browser metadata under `metadata.browser`.
-
-Phase 2 and Phase 3 may extend `metadata` with generation provenance, prompt text, seed, model/version identifiers, reference-analysis summaries, and reversible edit history. Those fields must not be required for normal audio rendering.
-
-## Browser Metadata
-
-Preset browser metadata is UI/library state, not realtime audio state. It does not create APVTS parameters and must not be read by the audio thread.
-
-The current browser-facing scan summary exposes:
-
-- `source`: `factory` or `user`.
-- `bank`: display bank name, for example `Factory` or `User`.
-- `category`: browser category, for example `Init`, `Plucks`, or `User`.
-- `tags`: top-level tag strings from the preset JSON.
-- `favorite_key`: stable local key. Factory presets use `<source>:<preset_id>`; user and legacy-user presets add the normalized local file path so duplicate user preset IDs do not share favorite state.
-- `favorite`: local favorite state resolved from the sidecar favorites file.
-
-The nested preset payload may provide browser metadata as:
-
-```json
-"metadata": {
-  "program": "synthia_lab_rebuild",
-  "browser": {
-    "bank": "Factory",
-    "category": "Plucks",
-    "source": "factory"
-  }
-}
-```
-
-If `metadata.browser` is absent, scan summaries fall back to source-derived bank/category defaults so older valid presets remain visible. Envelope `bank`, `category`, and `tags` exist for browser/audition tooling; render state is still owned by the nested preset payload.
-
-Favorites are stored outside preset JSON in:
-
-- `~/Music/ParkerX/synthia/PresetFavorites.json`
-
-The sidecar shape is:
+A program bank uses `.SynthiaBank`, an owned JSON format:
 
 ```json
 {
+  "fileType": "SynthiaBank",
   "schema_version": 1,
-  "favorite_keys": [
-    "factory:pluck-core-01",
-    "user:browser-favorite-test:/Users/example/Music/ParkerX/synthia/Presets/browser-favorite-test.SynthiaPreset"
-  ]
+  "subbanks": 4,
+  "programs_per_subbank": 128,
+  "program_state_xml": "<PROGRAM_BANK schema_version=\"1\" current_program=\"0\">...</PROGRAM_BANK>"
 }
 ```
 
-Keeping favorites in a sidecar lets factory presets remain read-only and lets future browser UI toggle favorites without mutating sound patches.
+The XML is a JUCE ValueTree. `PROGRAM_BANK` contains exactly 512 `PROGRAM` records with unique zero-based `index` and nonempty `name` fields. A populated record contains its `SYNTHIA_STATE` sound state and a `BASELINE` child holding the original program state for Reset. An empty record represents registry-default Init. Bank loading validates the envelope, version, slot count, indices, names, state types, finite numeric values and registered parameter ranges before replacing the bank. Files above 64 MB are rejected.
 
-## MIDI Controller Map
+**Proprietary `.fxp` and `.fxb` files are not supported.** Those extensions identify the reference instrument's files, not the owned Synthia format. Bank import/export rejects them explicitly. There is no documented proprietary mapping or imported third-party payload.
 
-MIDI controller assignments are global user-library state, not preset sound state and not APVTS parameters. They must not be stored in factory preset JSON or read from the audio thread.
+Create-new saves use exclusive creation and reject an existing destination. Overwrite saves write a temporary file and replace the target through JUCE's temporary-file operation. Both patch and bank saves run outside the audio thread. External user files are not rewritten during factory authoring or startup.
 
-The current user MIDI map file is:
+## Program Workflow
 
-- `~/Music/ParkerX/synthia/MidiControllerMap.json`
+The host sees 512 programs, divided into four subbanks of 128. Display numbering may be one-based; the processor API and persisted indices are zero-based. Startup slot 0 is Init, subsequent first-subbank slots contain owned factory patches, and the remaining slots are Init.
 
-The sidecar shape is:
+Program navigation stores the current edited sound in its program slot before selecting another slot. Changes remain available when returning to that program. The original baseline remains unchanged across navigation, allowing Reset to restore the program's original sound.
 
-```json
-{
-  "schema_version": 1,
-  "mappings": [
-    {
-      "cc": 74,
-      "parameter_id": "filter.cutoff_semitones"
-    }
-  ]
-}
-```
+- Rename changes the program name, capped at 128 characters.
+- Copy captures a separate clipboard sound.
+- Paste replaces the selected program with the copied sound.
+- Insert puts the copied sound at the selected index and shifts subsequent entries within that subbank; the last entry in that subbank is discarded.
+- Delete shifts later entries within the selected subbank left and places Init at its last slot.
+- Init creates registry-default sound state.
+- Randomize prepares a bounded, seed-repeatable native sound state.
+- Reset restores the selected program's original stored baseline without consulting an external file.
 
-Map rules:
+Host `setCurrentProgram` and incoming MIDI program changes publish one fixed atomic request. The latest pending request wins. A 60 Hz control timer applies it outside the audio thread; the sound becomes available to the next stable audio block after application. Notes arriving before application use the previous sound. This handoff is asynchronous, not sample-accurate.
 
-- `cc` must be `0` through `127`.
-- `parameter_id` must name an automatable parameter from the registry.
-- each CC may map to one parameter,
-- each parameter may have one learned CC,
-- later conflicting assignments replace earlier assignments during normalization,
-- reserved performance/safety CCs such as sustain, all-sound-off, and all-notes-off are rejected by the processor assignment path.
+As documented for the original workflow, MIDI program changes select the first 128 programs. Subbank selection and access to all 512 programs are available through the editor and host program API. CC bank-selection extensions are not implemented. Authoritative bank and host-state restoration clear any older pending program request.
 
-The processor loads this file on construction, publishes fixed atomic CC-to-parameter indexes for realtime MIDI lookup, and applies learned/mapped CC changes on the message-thread timer. Writes happen only from the control path when the user learns or forgets an assignment.
+## Host State
 
-## Parameter Values
+Host state uses a `SYNTHIA_STATE` ValueTree with `schema_version = 2`, plugin version, current patch name/path, the full registered parameter state and a `PROGRAM_BANK` child. It restores all program sounds, original baselines, names and selection without requiring external preset files.
 
-Parameter values should be stored in physical/display domains when stable and clear:
+The processor brackets control-path APVTS state replacement with an atomic sequence counter. The audio callback clears a block if a replacement overlaps its parameter snapshot. It never parses bank XML/JSON, mutates APVTS, accesses program storage or takes program/metadata locks. Program changes request an audio-thread panic after state replacement.
 
-- semitones as numbers,
-- milliseconds as numbers,
-- dB as numbers,
-- enums as strings,
-- normalized values only when the parameter is intentionally abstract.
+Selected part is atomic UI state and persists as the host root `selected_part` field. It survives editor close and is excluded from sound fingerprints and ordinary patch JSON. Local comparison snapshots, clipboard state and browser favorites are control/UI state. They are not DSP parameters. Dirty comparison uses registry-ordered sound fingerprints rather than mutable ValueTree identity.
 
-The parameter registry owns conversion between physical values and host-normalized values.
+## Native Parameter Families
 
-When a preset is loaded through the plugin editor, the processor resets APVTS parameters to registry defaults before applying preset overrides. This prevents values from a previous preset from leaking into presets that intentionally omit optional fields.
+Parts use `layer.1` for A and `layer.2` for B. Each part has `level_db`, `pan`, optional `solo`/`mute` controls, its own `filter.*` and `amp_env.*`, and two `osc.M.*` records.
 
-Init, Reset, and Randomize commands are control-path state operations, not additional preset JSON fields. Init prepares registry-default APVTS state named `Init`. Reset reloads the current preset path when one exists and falls back to Init for transient states. Randomize prepares bounded, seed-repeatable APVTS state and names it `Randomized <seed>`. A randomized patch can be saved through the normal preset writer after the user accepts it; the seed is not serialized unless a future Phase 2 provenance field explicitly adds it under `metadata`.
+Each oscillator stores:
 
-Dirty state and A/B compare are also control-path/UI workflow state, not preset JSON fields. `PresetManager` fingerprints registry-ordered serialized parameters to compare the current APVTS state against an immutable baseline fingerprint, ignoring host bookkeeping properties such as current preset name/path. `PresetLoadResult` carries that fingerprint because APVTS `ValueTree` state can be shared after replacement and must not be treated as a frozen baseline. Local A/B compare slots capture APVTS state snapshots and can prepare those snapshots for replacement without mutating live parameters first. Safe save uses explicit create-new versus overwrite-existing write modes; create-new writes use a final no-clobber file create, and metadata-aware writes serialize display name, author, description, tags, bank, and category through the normal preset JSON shape.
+- `voices` (0..8), `waveform`, `octave`, `note`, `fine_cents`.
+- `level`, `phase_degrees`, `detune`, `stereo`, `pan`, `retrigger`, `invert`.
 
-Current FX and quality fields are ordinary serialized parameters. `fx.enabled` is the global FX bypass. The fixed rack uses `fx.saturation_enabled`, `fx.distortion_mode`, `fx.phaser_*`, `fx.chorus_*`, `fx.eq_*`, `fx.delay_*`, `fx.reverb_*`, and `fx.compressor_*` fields. Delay sync is stored as an enum string such as `1/8`; distortion mode is stored as `Soft`, `Clip`, or `Fold`. Realtime and offline quality are stored as `quality.realtime_mode` and `quality.offline_mode`.
+The eight native waveform choices are `Saw`, `Pulse`, `Noise`, `Sine`, `Triangle`, `SawTriangle`, `HalfPulse`, `QuarterPulse`. All four slots default to level 1; A1 has one voice and the other three have zero voices. A zero voice count switches a slot off, so raising its Voices control makes it audible without an additional hidden enable operation.
 
-The Step LFO table is ordinary serialized parameters: `lfo.shape` gains the `Step` choice, and `lfo.step_count` (2..16), `lfo.step_smooth` (0..1), and `lfo.step.1` through `lfo.step.16` (-1..1) store the drawn pattern. Presets that omit step fields load the registry-default descending ramp.
+Part filters store `enabled`, `mode`, `cutoff_semitones`, `resonance`, `drive`, `keytrack`, `oversampling`, and `input`. Input choices are `None`, `A`, `B`, `A+B`; A defaults to input A and B to input B. Filter modes combine response and slope: `L2`, `L4`, `B2`, `B4`, `H2`, `H4`. Bypass is the filter Enabled switch. Internal filter tests may exercise additional algorithms, which are not exposed as native part modes.
 
-## Arp, Step, and Chord State
+Part amplitude envelopes use `layer.N.amp_env.attack_ms`, `decay_ms`, `sustain`, `release_ms`. The shared filter controls use `filter_control.cutoff_semitones`, `resonance`, `keytrack`, `warm_drive`. Warm Drive is a switch for the filter saturation quality path. `filter_control.drive` is an additional shared drive amount. Master output uses `master.level_db`.
 
-Phase 1 arp/chord state is ordinary serialized parameter state so host automation, saved presets, and future AI generation use the same contract.
+Modulation envelope 1 uses `mod_env.*`; envelope 2 uses `mod_env.2.*`. LFO 1 uses `lfo.*`; LFO 2 uses `lfo.2.*`. Each LFO stores waveform, Hz rate, sync division, phase, gate mode, gain, offset and `free`, plus the extended step table. Global Sync and Free select timing; there is no additional hidden rate-mode parameter. Free selects free-running Hz behavior and prevents note retrigger. Eligible global LFO clocks keep advancing during silent processor callbacks. The silent path consumes the current parameter snapshot and pending panic request, advances the clocks, and skips voice and FX rendering. `global.sync` controls host-synchronized timing. Portamento uses `voice.glide_ms` and `voice.portamento_mode`, with `Normal` and `Slide` choices. `voice.pitch_bend_range` stores semitones.
 
-Top-level arp fields:
+Arp state remains ordinary parameter state: `arp.enabled`, `mode`, `rate`, `time_ms`, `velocity_mode`, `wrap`, `gate`, `octaves`, `hold`, `swing`, `step_count`, and 16 `arp.step.N.*` records. Chord voices use `chord.*`. Native free timing uses `time_ms`; synchronized timing uses the registered division. Delay, phaser and chorus use Global Sync as their only timing-mode switch; there is no hidden delay-sync gate. The plugin effects rack is always available; its seven individual module switches own bypass. There is no public global FX gate. Internal render tools may still bypass the rack for dry proof. Init starts with all modules disabled. FX fields use `fx.*` and are fully saved, including 18 musical delay divisions, synchronized phaser/chorus rates, independent delay timings/divisions, stereo controls, filter cuts, smear, reverb predelay/damping and compressor timing. Warm Drive and part filter oversampling define the implemented quality path; there are no public quality-profile controls.
 
-- `arp.enabled`: boolean, default `false`.
-- `arp.mode`: enum string: `Up`, `Down`, `UpDown`, or `AsPlayed`.
-- `arp.rate`: enum string: `1/32`, `1/16`, `1/8`, `1/4`, or `1/2`.
-- `arp.gate`: normalized gate, `0.02` through `1.0`, default `0.75`.
-- `arp.octaves`: integer-like octave span, `1` through `4`.
-- `arp.hold`: boolean hold/latch behavior for released input notes.
-- `arp.swing`: normalized swing amount, `0.0` through `0.75`.
-- `arp.step_count`: integer-like active step count, `1` through `16`.
+## Modulation Routes
 
-Each fixed step lane is `arp.step.N.*` for `N = 1..16`:
+Eight slots represent the original source panels:
 
-- `arp.step.N.enabled`: boolean.
-- `arp.step.N.pitch_semitones`: integer-like pitch offset, `-24` through `24`.
-- `arp.step.N.velocity`: normalized velocity scale, `0.0` through `1.0`.
-- `arp.step.N.gate`: normalized per-step gate scale, `0.02` through `1.0`.
-- `arp.step.N.tie`: boolean; tied steps suppress the normal gate-off until the next step boundary.
+- Slots 1 and 2: modulation envelopes 1 and 2.
+- Slots 3 and 4: LFOs 1 and 2.
+- Slots 5..8: the four miscellaneous selectable sources.
 
-Top-level chord fields:
+Each slot uses `transmod.N.source` and optional `scaler`. Two visible routes store `transmod.N.route.M.destination` and `amount` for M = 1 or 2. Destination index 0 means None; subsequent indices follow `modulationDestinationCatalog()` order. Amount is bipolar -1..1 and scales into the destination's physical depth domain. Selection persists even at amount zero. A selected destination activates that slot, so ordinary classic controls do not require an additional enable switch.
 
-- `chord.enabled`: boolean, default `false`.
-- `chord.voice_count`: integer-like active chord voice count, `1` through `8`.
+The catalog includes shared pitch/cutoff/level/pan routes and 38 native destinations: pitch, volume, pan, detune and phase for each oscillator; cutoff, resonance and drive for each part filter; each part's level and pan; rate, gain and offset for each LFO; shared A+B resonance; and phaser center frequency. Phaser center modulation uses the most recently triggered active synthesis voice through its release, then the next latest active voice, and returns to zero when no voice remains. This last-note priority is the owned global-effect policy; exact proprietary polyphonic aggregation is not claimed. Sources include both modulation envelopes, both LFOs, both amplitude envelopes, velocity, keytrack, aftertouch, pitch bend, mod wheel and extended sources.
 
-Each fixed chord voice is `chord.voice.N.*` for `N = 1..8`:
+Advanced physical depths remain available as `transmod.N.native.<target_parameter_id>`. These add to the two visible route amounts. The optional `mod_slots` JSON objects use registered source/scaler choice strings, `depth_domain` (`Physical` or `Normalized`), and a `depths` map keyed by native destination parameter IDs or the shared routing aliases `osc.pitch_semitones`, `filter.cutoff_semitones`, `amp.level_db`, `amp.pan`. A shared alias describes modulation without inventing a nonexistent base knob. Runtime route writes can replace existing destinations or retain them explicitly. Clearing a slot removes its source and physical depths.
 
-- `chord.voice.N.enabled`: boolean.
-- `chord.voice.N.pitch_semitones`: integer-like pitch offset, `-24` through `24`.
-- `chord.voice.N.velocity`: normalized velocity scale, `0.0` through `1.0`.
+## MIDI Learn and UI Performance
 
-Defaults preserve existing behavior: arp and chord are disabled, step lanes are enabled with neutral pitch/velocity/gate, and chord voice 1 is the neutral root voice. Legacy presets that omit these fields load through registry defaults. Newly saved user presets include the full arp/step/chord parameter set.
+Per-control Learn, Cancel and Forget use the processor's MIDI assignment API. Learned CC maps remain in `~/Music/ParkerX/synthia/MidiControllerMap.json`, with `schema_version: 1` and `mappings` records containing `cc` and `parameter_id`. Each CC controls one automatable parameter and each parameter has one learned CC. Sustain and safety CCs are reserved. The map is published as fixed atomic indices; learned values are applied through the control timer.
 
-## Layer and Oscillator Slot State
+The UI keyboard and wheels submit short MIDI messages to a fixed 256-entry queue. The audio callback drains them before rendering. Unsupported messages and a full queue return failure. If overflow would lose a note release or panic message, the next block discards the queued UI events and panics the voices. Pitch and modulation wheels publish their latest values separately from the queue, so a full note queue cannot discard the final pitch-center event. Host SysEx and other messages longer than three bytes are skipped before constructing owning MIDI messages, avoiding payload allocation on the audio thread.
 
-Phase 1 now serializes a Sylenth-style A/B layer backbone as ordinary parameter state. Layer indices are numeric in IDs:
-
-- `layer.1.*`: Layer A.
-- `layer.2.*`: Layer B.
-
-Layer fields:
-
-- `layer.N.enabled`: boolean.
-- `layer.N.level_db`: dB, `-48.0` through `12.0`, default `0.0`.
-- `layer.N.pan`: normalized bipolar pan, `-1.0` through `1.0`, default `0.0`.
-- `layer.N.solo`: boolean.
-- `layer.N.mute`: boolean.
-
-Each layer owns two oscillator-slot records, giving four slots total: `layer.1.osc.1`, `layer.1.osc.2`, `layer.2.osc.1`, and `layer.2.osc.2`.
-
-Oscillator-slot fields:
-
-- `layer.N.osc.M.enabled`: boolean.
-- `layer.N.osc.M.voices`: integer-like voice count, `0` through `8`; `0` is a disabled-slot-compatible value.
-- `layer.N.osc.M.waveform`: enum string: `Saw`, `Pulse`, `Noise`, or `Sub`.
-- `layer.N.osc.M.octave`: integer-like octave offset, `-4` through `4`.
-- `layer.N.osc.M.note`: integer-like semitone offset, `-12` through `12`.
-- `layer.N.osc.M.fine_cents`: cents, `-100.0` through `100.0`.
-- `layer.N.osc.M.level`: normalized level, `0.0` through `1.0`.
-- `layer.N.osc.M.phase_degrees`: degrees, `0.0` through `360.0`.
-- `layer.N.osc.M.detune`: normalized detune, `0.0` through `1.0`.
-- `layer.N.osc.M.stereo`: normalized stereo spread, `0.0` through `1.0`.
-- `layer.N.osc.M.pan`: normalized bipolar pan, `-1.0` through `1.0`.
-- `layer.N.osc.M.retrigger`: boolean.
-- `layer.N.osc.M.invert`: boolean.
-
-Defaults preserve the current sound path:
-
-- Layer A is enabled.
-- Layer B is disabled.
-- Layer A oscillator 1 is enabled with `voices = 1`, `waveform = Saw`, and `level = 1.0`.
-- The other three oscillator slots are disabled with `voices = 0` and `level = 0.0`.
-
-The existing flat `osc.*`, `filter.*`, envelope, modulation, amp, and FX parameters remain host-stable. Layer A oscillator 1 gates and mixes the legacy `osc.*` compatibility source; A2/B1/B2 render from `layer.N.osc.M.*` slot fields through the current oscillator stack foundation. Legacy presets that omit `layer.*` fields load by registry defaults; host states that predate these fields are merged over registry defaults before restore. Newly saved user presets include the layer and oscillator-slot fields.
-
-Legacy presets are not fully inferred into equivalent oscillator-slot state yet. For example, a preset that renders from flat stack, pulse, sub, and detune parameters will still show the default Layer A slot backbone unless it explicitly stores layer fields. UI should treat Layer A oscillator 1 as the compatibility source for the flat oscillator path, not as a complete visualization of every legacy `osc.*` field.
-
-Layer display names are not automatable parameters. If custom names are added later, they should live in preset metadata or UI-local state with an explicit migration rule.
-
-## Mod Slot Shape
-
-Example:
-
-```json
-{
-  "slot_id": 1,
-  "enabled": true,
-  "source": "LFO",
-  "scaler": "Macro1",
-  "depth_domain": "Physical",
-  "depths": {
-    "filter.cutoff_semitones": 12.0,
-    "amp.pan": 0.25
-  }
-}
-```
-
-Rules:
-
-- `slot_id` must be 1 through 8 for the v1 profile.
-- `source` is required when `enabled` is true.
-- `scaler` may be `None`.
-- Unknown destinations should be preserved during migration when possible.
-- Runtime UI/model reads use `ModulationRouteModel` to derive route rows from the flat TransMod parameters. The legacy normalized `transmod.N.depth` field remains a cutoff-depth contributor and is surfaced as a contributing route parameter when present.
-- Runtime UI/model writes use `ModulationRouteModel` write requests that compile source, scaler, destination, and depth intent back into the existing flat `transmod.N.*` parameters. The current write adapter replaces a slot with one destination route and emits clear-slot edits for removal; per-route bypass/remove state and expanded destinations remain future schema work.
-
-## Macro Shape
-
-Example:
-
-```json
-{
-  "id": "motion",
-  "display_name": "Motion",
-  "value": 0.5,
-  "assignments": [
-    {
-      "target_id": "direct.filter_lfo_semitones",
-      "min": 4.0,
-      "max": 24.0,
-      "curve": "linear"
-    }
-  ]
-}
-```
-
-The current factory `space` macro declares assignments to `fx.delay_mix` and `fx.reverb_mix`. Runtime processing also maps `macro.space` into delay and reverb wetness so the preset remains useful even before a richer macro-assignment engine exists. The added phaser, EQ, compressor, and distortion-mode fields default to bypassed or no-op values so legacy presets keep their prior sound.
-
-## Migration Rules
-
-- Schema versions are monotonic integers.
-- Every migration must be tested.
-- Unknown fields should be preserved when possible.
-- Unknown parameter IDs should warn, not crash.
-- Invalid numeric values may be clamped only during explicit migration.
-- Host state must include enough data to restore without external preset files.
-
-## Factory Preset Naming
-
-Shipped factory presets must avoid unlicensed third-party marks.
-
-Internal research names may exist in `metadata` during development, but release builds should omit or sanitize them.
-
-The current factory preset display names are `Init`, `Pluck Core 01`, `Supersaw Stack 01`, `Bass Wub 01`, `Pad Wide 01`, `Arp Motion 01`, and `FX Space 01`.
+Favorites remain in `~/Music/ParkerX/synthia/PresetFavorites.json`; user patches remain under `~/Music/ParkerX/synthia/Presets`. Neither sidecar is copied into factory patches. Factory resources are read-only in the browser, with source-directory fallback for development.

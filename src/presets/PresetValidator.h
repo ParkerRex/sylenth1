@@ -18,4 +18,3 @@ struct PresetValidationResult
 PresetValidationResult validatePresetFile(const std::filesystem::path& path);
 std::vector<PresetValidationResult> validatePresetDirectory(const std::filesystem::path& directory);
 } // namespace synth
-

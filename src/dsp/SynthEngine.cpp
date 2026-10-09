@@ -33,89 +33,13 @@ bool directChordConfigChanged(const ChordParameters& before, const ChordParamete
     return false;
 }
 
-int preparedLayerOscillatorIndex(int layerIndex, int oscillatorIndex) noexcept
-{
-    return layerIndex * oscillatorSlotsPerLayer + oscillatorIndex;
-}
-
-bool preparedIsLegacyOscillatorSlot(int layerIndex, int oscillatorIndex) noexcept
-{
-    return layerIndex == 0 && oscillatorIndex == 0;
-}
-
-bool preparedHasSoloLayer(const SynthParameters& parameters) noexcept
-{
-    for (const auto& layer : parameters.layers)
-    {
-        if (layer.enabled && layer.solo)
-            return true;
-    }
-
-    return false;
-}
-
-bool preparedShouldRenderLayer(const LayerParameters& layer, bool soloActive) noexcept
-{
-    if (!layer.enabled || layer.mute)
-        return false;
-
-    return !soloActive || layer.solo;
-}
-
-bool preparedShouldRenderOscillatorSlot(const LayerOscillatorParameters& oscillator) noexcept
-{
-    return oscillator.enabled && oscillator.voices > 0 && oscillator.level > 0.0f;
-}
-
-OscillatorParameters toPreparedSlotOscillatorParameters(const LayerOscillatorParameters& slot,
-                                                        const SynthParameters& parameters) noexcept
-{
-    OscillatorParameters oscillator;
-    oscillator.pitchSemitones = static_cast<float>(slot.octave * 12 + slot.note);
-    oscillator.fineCents = slot.fineCents;
-    oscillator.stackCount = std::clamp(slot.voices, 1, 8);
-    oscillator.stackDetune = slot.detune;
-    oscillator.pulseWidth = parameters.osc.pulseWidth;
-    oscillator.subWave = parameters.osc.subWave;
-    oscillator.subOctave = 1;
-    oscillator.subPulseWidth = parameters.osc.subPulseWidth;
-
-    switch (slot.waveform)
-    {
-        case OscillatorSlotWaveform::Saw:
-            oscillator.sawLevel = 1.0f;
-            break;
-        case OscillatorSlotWaveform::Pulse:
-            oscillator.sawLevel = 0.0f;
-            oscillator.pulseLevel = 1.0f;
-            break;
-        case OscillatorSlotWaveform::Noise:
-            oscillator.sawLevel = 0.0f;
-            oscillator.noiseLevel = 1.0f;
-            break;
-        case OscillatorSlotWaveform::Sub:
-            oscillator.sawLevel = 0.0f;
-            oscillator.subLevel = 1.0f;
-            break;
-    }
-
-    return oscillator;
-}
-
-bool isPreparedSawStackOnly(const OscillatorParameters& oscillator) noexcept
-{
-    return oscillator.sawLevel > 0.0f
-        && oscillator.pulseLevel <= 0.0f
-        && oscillator.noiseLevel <= 0.0f
-        && oscillator.subLevel <= 0.0f
-        && oscillator.syncAmount <= 0.001f;
-}
 } // namespace
 
 void SynthEngine::prepare(double newSampleRate, int newMaxBlockSize)
 {
-    sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
+    sampleRate = std::isfinite(newSampleRate) && newSampleRate > 0.0 ? newSampleRate : 44100.0;
     maxBlockSize = std::max(1, newMaxBlockSize);
+    masterSmoothingSamples = std::max(1, static_cast<int>(sampleRate * 0.003));
     voices.prepare(sampleRate);
     fx.prepare(sampleRate, maxBlockSize);
     reset();
@@ -123,6 +47,8 @@ void SynthEngine::prepare(double newSampleRate, int newMaxBlockSize)
 
 void SynthEngine::reset() noexcept
 {
+    masterCurrentGain = masterTargetGain;
+    masterSmoothingRemaining = 0;
     performance = {};
     parameters.performance = performance;
     sustainPedalDown = false;
@@ -239,7 +165,7 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
             const auto& defaultOscillator = defaultLayer.oscillators[oscillatorIndex];
             oscillator.voices = std::clamp(oscillator.voices, 0, 8);
             oscillator.waveform = static_cast<OscillatorSlotWaveform>(
-                std::clamp(static_cast<int>(oscillator.waveform), 0, 3));
+                std::clamp(static_cast<int>(oscillator.waveform), 0, 7));
             oscillator.octave = std::clamp(oscillator.octave, -4, 4);
             oscillator.note = std::clamp(oscillator.note, -12, 12);
             oscillator.fineCents = std::clamp(finiteOr(oscillator.fineCents, defaultOscillator.fineCents),
@@ -255,7 +181,7 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     }
     parameters.osc.pitchSemitones = std::clamp(finiteOr(parameters.osc.pitchSemitones, defaults.osc.pitchSemitones), -48.0f, 48.0f);
     parameters.osc.fineCents = std::clamp(finiteOr(parameters.osc.fineCents, defaults.osc.fineCents), -100.0f, 100.0f);
-    parameters.osc.stackCount = std::clamp(parameters.osc.stackCount, 1, 5);
+    parameters.osc.stackCount = std::clamp(parameters.osc.stackCount, 1, 8);
     parameters.osc.stackDetune = std::clamp(finiteOr(parameters.osc.stackDetune, defaults.osc.stackDetune), 0.0f, 1.0f);
     parameters.osc.sawLevel = std::clamp(finiteOr(parameters.osc.sawLevel, defaults.osc.sawLevel), 0.0f, 1.0f);
     parameters.osc.pulseLevel = std::clamp(finiteOr(parameters.osc.pulseLevel, defaults.osc.pulseLevel), 0.0f, 1.0f);
@@ -267,54 +193,6 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.osc.subWave = static_cast<SubWave>(std::clamp(static_cast<int>(parameters.osc.subWave), 0, 3));
     parameters.osc.subOctave = std::clamp(parameters.osc.subOctave, 1, 3);
     parameters.osc.phaseReset = std::clamp(parameters.osc.phaseReset, 0, 3);
-    parameters.oscillatorRender.activeSlotCount = 0;
-    parameters.oscillatorRender.cacheValid = false;
-    const auto soloLayerActive = preparedHasSoloLayer(parameters);
-    for (int layerIndex = 0; layerIndex < layerCount; ++layerIndex)
-    {
-        const auto& layer = parameters.layers[static_cast<std::size_t>(layerIndex)];
-        if (!preparedShouldRenderLayer(layer, soloLayerActive))
-            continue;
-
-        const auto layerGain = decibelsToGain(layer.levelDb);
-        for (int oscillatorIndex = 0; oscillatorIndex < oscillatorSlotsPerLayer; ++oscillatorIndex)
-        {
-            const auto& slot = layer.oscillators[static_cast<std::size_t>(oscillatorIndex)];
-            if (!preparedShouldRenderOscillatorSlot(slot))
-                continue;
-
-            if (parameters.oscillatorRender.activeSlotCount >= preparedOscillatorSlotCount)
-                break;
-
-            auto& preparedSlot =
-                parameters.oscillatorRender.activeSlots[static_cast<std::size_t>(
-                    parameters.oscillatorRender.activeSlotCount++)];
-            preparedSlot = {};
-            preparedSlot.legacy = preparedIsLegacyOscillatorSlot(layerIndex, oscillatorIndex);
-            preparedSlot.layerIndex = layerIndex;
-            preparedSlot.oscillatorIndex = oscillatorIndex;
-            preparedSlot.oscillatorStateIndex = preparedLayerOscillatorIndex(layerIndex, oscillatorIndex);
-            preparedSlot.gain = layerGain * slot.level;
-            preparedSlot.pan = layer.pan + slot.pan;
-            preparedSlot.stereo = slot.stereo;
-            preparedSlot.panWeight = preparedSlot.gain;
-            preparedSlot.weightedPanBase = preparedSlot.pan * preparedSlot.gain;
-            preparedSlot.invert = slot.invert;
-            preparedSlot.oscillator = preparedSlot.legacy
-                ? parameters.osc
-                : toPreparedSlotOscillatorParameters(slot, parameters);
-            preparedSlot.sawStackOnly = isPreparedSawStackOnly(preparedSlot.oscillator);
-            preparedSlot.sawStackGain = 0.7f
-                * std::clamp(preparedSlot.oscillator.sawLevel, 0.0f, 1.0f)
-                * inverseSqrtForCount(std::clamp(preparedSlot.oscillator.stackCount, 1, 8));
-        }
-    }
-    parameters.oscillatorRender.cacheValid = true;
-    parameters.filter.cutoffSemitones = std::clamp(finiteOr(parameters.filter.cutoffSemitones, defaults.filter.cutoffSemitones), 0.0f, 136.0f);
-    parameters.filter.resonance = std::clamp(finiteOr(parameters.filter.resonance, defaults.filter.resonance), 0.0f, 1.0f);
-    parameters.filter.drive = std::clamp(finiteOr(parameters.filter.drive, defaults.filter.drive), 0.0f, 1.0f);
-    parameters.filter.keytrack = std::clamp(finiteOr(parameters.filter.keytrack, defaults.filter.keytrack), -1.0f, 2.0f);
-    parameters.filter.oversampling = std::clamp(parameters.filter.oversampling, 0, 3);
     parameters.filter.mode = static_cast<FilterMode>(std::clamp(static_cast<int>(parameters.filter.mode), 0, 8));
     parameters.amp.drive = std::clamp(finiteOr(parameters.amp.drive, defaults.amp.drive), 0.0f, 1.0f);
     parameters.amp.levelDb = std::clamp(finiteOr(parameters.amp.levelDb, defaults.amp.levelDb), -48.0f, 12.0f);
@@ -327,14 +205,14 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.ampEnv.sustain = std::clamp(finiteOr(parameters.ampEnv.sustain, defaults.ampEnv.sustain), 0.0f, 1.0f);
     parameters.ampEnv.releaseMs = std::clamp(finiteOr(parameters.ampEnv.releaseMs, defaults.ampEnv.releaseMs), 1.0f, 10000.0f);
     parameters.modEnv.attackMs = std::clamp(finiteOr(parameters.modEnv.attackMs, defaults.modEnv.attackMs), 0.0f, 10000.0f);
-    parameters.modEnv.decayMs = std::clamp(finiteOr(parameters.modEnv.decayMs, defaults.modEnv.decayMs), 1.0f, 10000.0f);
+    parameters.modEnv.decayMs = std::clamp(finiteOr(parameters.modEnv.decayMs, defaults.modEnv.decayMs), 0.0f, 10000.0f);
     parameters.modEnv.sustain = std::clamp(finiteOr(parameters.modEnv.sustain, defaults.modEnv.sustain), 0.0f, 1.0f);
-    parameters.modEnv.releaseMs = std::clamp(finiteOr(parameters.modEnv.releaseMs, defaults.modEnv.releaseMs), 1.0f, 10000.0f);
+    parameters.modEnv.releaseMs = std::clamp(finiteOr(parameters.modEnv.releaseMs, defaults.modEnv.releaseMs), 0.0f, 10000.0f);
     parameters.lfo.shape = static_cast<LfoShapeChoice>(
         std::clamp(static_cast<int>(parameters.lfo.shape), 0, static_cast<int>(LfoShapeChoice::Step)));
     parameters.lfo.rateMode = static_cast<LfoRateMode>(std::clamp(static_cast<int>(parameters.lfo.rateMode), 0, 1));
     parameters.lfo.rateHz = std::clamp(finiteOr(parameters.lfo.rateHz, defaults.lfo.rateHz), 0.01f, 40.0f);
-    parameters.lfo.syncDivision = std::clamp(parameters.lfo.syncDivision, 0, 5);
+    parameters.lfo.syncDivision = std::clamp(parameters.lfo.syncDivision, 0, 17);
     parameters.lfo.phaseDegrees = std::clamp(finiteOr(parameters.lfo.phaseDegrees, defaults.lfo.phaseDegrees), 0.0f, 360.0f);
     parameters.lfo.gateMode = static_cast<LfoGateMode>(std::clamp(static_cast<int>(parameters.lfo.gateMode), 0, 3));
     parameters.lfo.swing = std::clamp(finiteOr(parameters.lfo.swing, defaults.lfo.swing), 0.0f, 1.0f);
@@ -346,8 +224,8 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.ramp.delayMs = std::clamp(finiteOr(parameters.ramp.delayMs, defaults.ramp.delayMs), 0.0f, 10000.0f);
     parameters.ramp.riseMs = std::clamp(finiteOr(parameters.ramp.riseMs, defaults.ramp.riseMs), 1.0f, 10000.0f);
     parameters.ramp.curve = static_cast<RampCurve>(std::clamp(static_cast<int>(parameters.ramp.curve), 0, 2));
-    parameters.arp.mode = static_cast<ArpMode>(std::clamp(static_cast<int>(parameters.arp.mode), 0, 3));
-    parameters.arp.rate = static_cast<ArpRateDivision>(std::clamp(static_cast<int>(parameters.arp.rate), 0, 4));
+    parameters.arp.mode = static_cast<ArpMode>(std::clamp(static_cast<int>(parameters.arp.mode), 0, 9));
+    parameters.arp.rate = static_cast<ArpRateDivision>(std::clamp(static_cast<int>(parameters.arp.rate), 0, 17));
     parameters.arp.gate = std::clamp(finiteOr(parameters.arp.gate, defaults.arp.gate), 0.02f, 1.0f);
     parameters.arp.octaves = std::clamp(parameters.arp.octaves, 1, 4);
     parameters.arp.swing = std::clamp(finiteOr(parameters.arp.swing, defaults.arp.swing), 0.0f, 0.75f);
@@ -375,14 +253,88 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.direct.pulseModEnv = std::clamp(finiteOr(parameters.direct.pulseModEnv, defaults.direct.pulseModEnv), -1.0f, 1.0f);
     for (auto& slot : parameters.transMod.slots)
     {
-        slot.source = static_cast<ModSource>(std::clamp(static_cast<int>(slot.source), 0, 19));
-        slot.scaler = static_cast<ModSource>(std::clamp(static_cast<int>(slot.scaler), 0, 19));
+        slot.source = static_cast<ModSource>(std::clamp(static_cast<int>(slot.source), 0, 23));
+        slot.scaler = static_cast<ModSource>(std::clamp(static_cast<int>(slot.scaler), 0, 23));
         slot.depth = std::clamp(finiteOr(slot.depth, 0.0f), -1.0f, 1.0f);
         slot.oscPitchSemitones = std::clamp(finiteOr(slot.oscPitchSemitones, 0.0f), -48.0f, 48.0f);
         slot.pulseWidth = std::clamp(finiteOr(slot.pulseWidth, 0.0f), -1.0f, 1.0f);
         slot.filterCutoffSemitones = std::clamp(finiteOr(slot.filterCutoffSemitones, 0.0f), -72.0f, 72.0f);
         slot.ampLevelDb = std::clamp(finiteOr(slot.ampLevelDb, 0.0f), -24.0f, 24.0f);
         slot.pan = std::clamp(finiteOr(slot.pan, 0.0f), -1.0f, 1.0f);
+    }
+    const auto sanitizeEnvelope = [](EnvelopeParameters& envelope) noexcept {
+        envelope.attackMs = std::clamp(finiteOr(envelope.attackMs, 0.0f), 0.0f, 10000.0f);
+        envelope.decayMs = std::clamp(finiteOr(envelope.decayMs, 300.0f), 0.0f, 10000.0f);
+        envelope.sustain = std::clamp(finiteOr(envelope.sustain, 0.0f), 0.0f, 1.0f);
+        envelope.releaseMs = std::clamp(finiteOr(envelope.releaseMs, 200.0f), 0.0f, 10000.0f);
+    };
+    for (auto& layer : parameters.layers)
+    {
+        sanitizeEnvelope(layer.ampEnv);
+        layer.input = static_cast<FilterInput>(std::clamp(static_cast<int>(layer.input), 0, 3));
+        auto& filter = layer.filter;
+        filter.mode = static_cast<FilterMode>(std::clamp(static_cast<int>(filter.mode), 0, 8));
+        filter.cutoffSemitones = std::clamp(finiteOr(filter.cutoffSemitones, 96.0f), 0.0f, 136.0f);
+        filter.resonance = std::clamp(finiteOr(filter.resonance, 0.0f), 0.0f, 1.0f);
+        filter.drive = std::clamp(finiteOr(filter.drive, 0.0f), 0.0f, 1.0f);
+        filter.keytrack = std::clamp(finiteOr(filter.keytrack, 0.0f), -1.0f, 2.0f);
+        filter.oversampling = std::clamp(filter.oversampling, 0, 3);
+    }
+    sanitizeEnvelope(parameters.modEnv2);
+    auto& secondLfo = parameters.lfo2;
+    secondLfo.shape = static_cast<LfoShapeChoice>(std::clamp(static_cast<int>(secondLfo.shape), 0, 7));
+    secondLfo.rateMode = static_cast<LfoRateMode>(std::clamp(static_cast<int>(secondLfo.rateMode), 0, 1));
+    secondLfo.rateHz = std::clamp(finiteOr(secondLfo.rateHz, 2.0f), 0.01f, 40.0f);
+    secondLfo.syncDivision = std::clamp(secondLfo.syncDivision, 0, 17);
+    secondLfo.gateMode = static_cast<LfoGateMode>(std::clamp(static_cast<int>(secondLfo.gateMode), 0, 3));
+    secondLfo.phaseDegrees = std::clamp(finiteOr(secondLfo.phaseDegrees, 0.0f), 0.0f, 360.0f);
+    secondLfo.stepCount = std::clamp(secondLfo.stepCount, 1, lfoStepSlotCount);
+    secondLfo.stepSmooth = std::clamp(finiteOr(secondLfo.stepSmooth, 0.0f), 0.0f, 1.0f);
+    for (auto& step : secondLfo.steps) step = std::clamp(finiteOr(step, 0.0f), -1.0f, 1.0f);
+    for (auto* oscillator : { &parameters.lfo, &parameters.lfo2 })
+    {
+        oscillator->gain = std::clamp(finiteOr(oscillator->gain, 1.0f), 0.0f, 1.0f);
+        oscillator->offset = std::clamp(finiteOr(oscillator->offset, 0.0f), -1.0f, 1.0f);
+    }
+    parameters.filterControl.cutoffSemitones = std::clamp(finiteOr(parameters.filterControl.cutoffSemitones, 0.0f), -136.0f, 136.0f);
+    parameters.filterControl.resonance = std::clamp(finiteOr(parameters.filterControl.resonance, 0.0f), -1.0f, 1.0f);
+    parameters.filterControl.drive = std::clamp(finiteOr(parameters.filterControl.drive, 0.0f), 0.0f, 1.0f);
+    parameters.filterControl.keytrack = std::clamp(finiteOr(parameters.filterControl.keytrack, 0.0f), -1.0f, 2.0f);
+    parameters.master.levelDb = std::clamp(finiteOr(parameters.master.levelDb, 0.0f), -96.0f, 12.0f);
+    const auto targetGain = parameters.master.levelDb <= -48.0f ? 0.0f : decibelsToGain(parameters.master.levelDb);
+    if (!masterGainInitialized)
+    {
+        masterCurrentGain = targetGain;
+        masterGainInitialized = true;
+    }
+    if (masterTargetGain != targetGain) masterSmoothingRemaining = masterSmoothingSamples;
+    masterTargetGain = targetGain;
+    parameters.portamentoMode = static_cast<PortamentoMode>(std::clamp(static_cast<int>(parameters.portamentoMode), 0, 1));
+    parameters.pitchBendRange = std::clamp(finiteOr(parameters.pitchBendRange, 2.0f), 0.0f, 24.0f);
+    parameters.arp.wrap = std::clamp(parameters.arp.wrap, 0, 128);
+    parameters.arp.timeMs = std::clamp(finiteOr(parameters.arp.timeMs, 125.0f), 1.0f, 6000.0f);
+    parameters.arp.velocityMode = static_cast<ArpVelocityMode>(std::clamp(static_cast<int>(parameters.arp.velocityMode), 0, 4));
+    for (auto& slot : parameters.transMod.slots)
+    {
+        for (std::size_t index = 0; index < slot.nativeDepths.size(); ++index)
+        {
+            auto limit = 1.0f;
+            if (index < 20)
+            {
+                switch (index % 5)
+                {
+                    case 0: limit = 48.0f; break;
+                    case 1: limit = 24.0f; break;
+                    case 4: limit = 180.0f; break;
+                    default: break;
+                }
+            }
+            else if (index == 20 || index == 23) limit = 72.0f;
+            else if (index == 26 || index == 28) limit = 24.0f;
+            else if (index == 30 || index == 33) limit = 40.0f;
+            else if (index == static_cast<std::size_t>(NativeModDestination::PhaserCenterFrequency)) limit = 20000.0f;
+            slot.nativeDepths[index] = std::clamp(finiteOr(slot.nativeDepths[index], 0.0f), -limit, limit);
+        }
     }
     parameters.transMod.activeSlotCount = 0;
     for (const auto& slot : parameters.transMod.slots)
@@ -400,7 +352,7 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.macro.width = std::clamp(finiteOr(parameters.macro.width, defaults.macro.width), 0.0f, 1.0f);
     parameters.macro.drive = std::clamp(finiteOr(parameters.macro.drive, defaults.macro.drive), 0.0f, 1.0f);
     parameters.macro.space = std::clamp(finiteOr(parameters.macro.space, defaults.macro.space), 0.0f, 1.0f);
-    parameters.fx.distortionMode = static_cast<DistortionMode>(std::clamp(static_cast<int>(parameters.fx.distortionMode), 0, 2));
+    parameters.fx.distortionMode = static_cast<DistortionMode>(std::clamp(static_cast<int>(parameters.fx.distortionMode), 0, 4));
     parameters.fx.saturationMix = std::clamp(finiteOr(parameters.fx.saturationMix, defaults.fx.saturationMix), 0.0f, 1.0f);
     parameters.fx.saturationDrive = std::clamp(finiteOr(parameters.fx.saturationDrive, defaults.fx.saturationDrive), 0.0f, 1.0f);
     parameters.fx.phaserMix = std::clamp(finiteOr(parameters.fx.phaserMix, defaults.fx.phaserMix), 0.0f, 1.0f);
@@ -408,7 +360,7 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     parameters.fx.phaserDepth = std::clamp(finiteOr(parameters.fx.phaserDepth, defaults.fx.phaserDepth), 0.0f, 1.0f);
     parameters.fx.phaserFeedback = std::clamp(finiteOr(parameters.fx.phaserFeedback, defaults.fx.phaserFeedback), 0.0f, 0.95f);
     parameters.fx.delayMix = std::clamp(finiteOr(parameters.fx.delayMix, defaults.fx.delayMix), 0.0f, 1.0f);
-    parameters.fx.delaySyncDivision = static_cast<DelaySyncDivision>(std::clamp(static_cast<int>(parameters.fx.delaySyncDivision), 0, 4));
+    parameters.fx.delaySyncDivision = static_cast<DelaySyncDivision>(std::clamp(static_cast<int>(parameters.fx.delaySyncDivision), 0, 17));
     parameters.fx.delayFeedback = std::clamp(finiteOr(parameters.fx.delayFeedback, defaults.fx.delayFeedback), 0.0f, 0.86f);
     parameters.fx.reverbMix = std::clamp(finiteOr(parameters.fx.reverbMix, defaults.fx.reverbMix), 0.0f, 1.0f);
     parameters.fx.reverbDecay = std::clamp(finiteOr(parameters.fx.reverbDecay, defaults.fx.reverbDecay), 0.0f, 1.0f);
@@ -461,6 +413,12 @@ void SynthEngine::setParameters(const SynthParameters& newParameters) noexcept
     voices.syncVoiceLimit(parameters);
 }
 
+void SynthEngine::advanceIdleModulators(int numSamples) noexcept
+{
+    if (hasPendingArpeggiatorEvents()) return;
+    voices.advanceIdleModulators(numSamples, parameters);
+}
+
 RenderStats SynthEngine::process(float* left, float* right, int numSamples) noexcept
 {
     RenderStats stats;
@@ -468,9 +426,16 @@ RenderStats SynthEngine::process(float* left, float* right, int numSamples) noex
     voices.syncActiveVoiceModulators(parameters);
 
     const auto emitSample = [&stats, left, right, this](int index, StereoFrame frame) noexcept {
+        parameters.fx.phaserCenterOffsetHz = std::clamp(finiteOr(frame.phaserCenterOffsetHz, 0.0f), -20000.0f, 20000.0f);
         const auto fxFrame = fx.process({ frame.left, frame.right }, parameters);
-        auto l = fxFrame.left;
-        auto r = fxFrame.right;
+        if (masterSmoothingRemaining > 0)
+        {
+            masterCurrentGain += (masterTargetGain - masterCurrentGain) / static_cast<float>(masterSmoothingRemaining);
+            if (--masterSmoothingRemaining == 0) masterCurrentGain = masterTargetGain;
+        }
+        const auto masterGain = masterCurrentGain;
+        auto l = fxFrame.left * masterGain;
+        auto r = fxFrame.right * masterGain;
 
         if (!std::isfinite(l))
         {
@@ -484,8 +449,9 @@ RenderStats SynthEngine::process(float* left, float* right, int numSamples) noex
             r = 0.0f;
         }
 
-        l = std::clamp(l, -1.0f, 1.0f);
-        r = std::clamp(r, -1.0f, 1.0f);
+        constexpr auto outputLimit = 32.0f;
+        l = std::clamp(l, -outputLimit, outputLimit);
+        r = std::clamp(r, -outputLimit, outputLimit);
 
         if (left != nullptr)
             left[index] = l;
@@ -502,6 +468,7 @@ RenderStats SynthEngine::process(float* left, float* right, int numSamples) noex
         for (int i = 0; i < stats.samplesRendered; ++i)
         {
             processArpEvent(arpeggiator.processSample(parameters, sampleRate));
+            parameters.performance.stepVelocity = arpeggiator.getStepVelocity();
             emitSample(i, voices.renderSample(parameters));
         }
     }
@@ -509,12 +476,13 @@ RenderStats SynthEngine::process(float* left, float* right, int numSamples) noex
     {
         float blockLeft[renderBlockMaxSamples];
         float blockRight[renderBlockMaxSamples];
+        float phaserCenterOffsetsHz[renderBlockMaxSamples];
         for (int start = 0; start < stats.samplesRendered; start += renderBlockMaxSamples)
         {
             const auto blockSamples = std::min(renderBlockMaxSamples, stats.samplesRendered - start);
-            voices.renderBlock(parameters, blockLeft, blockRight, blockSamples);
+            voices.renderBlock(parameters, blockLeft, blockRight, blockSamples, phaserCenterOffsetsHz);
             for (int i = 0; i < blockSamples; ++i)
-                emitSample(start + i, StereoFrame { blockLeft[i], blockRight[i] });
+                emitSample(start + i, StereoFrame { blockLeft[i], blockRight[i], phaserCenterOffsetsHz[i] });
         }
     }
 
@@ -570,11 +538,34 @@ void SynthEngine::triggerDirectNoteOff(int midiNote) noexcept
 
 void SynthEngine::processArpEvent(const ArpGeneratedEvent& event) noexcept
 {
-    if (event.noteOff)
-        voices.noteOff(event.noteOffNumber, parameters);
-
-    if (event.noteOn)
-        voices.noteOn(event.noteOnNumber, event.velocity, parameters);
+    const auto releaseNotes = [this, &event]() noexcept {
+        if (event.noteOffCount > 0)
+        {
+            for (int index = 0; index < std::min(event.noteOffCount, static_cast<int>(event.noteOffNumbers.size())); ++index)
+                voices.noteOff(event.noteOffNumbers[static_cast<std::size_t>(index)], parameters);
+        }
+        else if (event.noteOff)
+            voices.noteOff(event.noteOffNumber, parameters);
+    };
+    const auto triggerNotes = [this, &event]() noexcept {
+        if (event.noteOnCount > 0)
+        {
+            for (int index = 0; index < std::min(event.noteOnCount, static_cast<int>(event.noteOnNumbers.size())); ++index)
+                voices.noteOn(event.noteOnNumbers[static_cast<std::size_t>(index)], event.velocities[static_cast<std::size_t>(index)], parameters);
+        }
+        else if (event.noteOn)
+            voices.noteOn(event.noteOnNumber, event.velocity, parameters);
+    };
+    if (event.noteOnBeforeNoteOff)
+    {
+        triggerNotes();
+        releaseNotes();
+    }
+    else
+    {
+        releaseNotes();
+        triggerNotes();
+    }
 }
 
 int SynthEngine::buildDirectChordOutputNotes(

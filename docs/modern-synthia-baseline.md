@@ -1,6 +1,8 @@
 # Modern Sylenth Baseline
 
-Status: baseline plan with Phase 1 layer/oscillator-slot state backbone implemented.
+Status: historical feature research. The current 2026-10-09 native release contract is at the start of `SPEC.md`, with active conformance tracking in `docs/CLASSIC_PARITY.md`.
+
+The matrix below records earlier research and incremental implementation decisions. It contains stale counts, completed gaps, and modern-interface proposals. It MUST NOT be used as the current acceptance checklist. In particular, classic conformance requires real independent part paths and original control coverage; it is not satisfied by the presence of layer/slot fields or a successful self-render suite.
 
 Purpose: define the lab roadmap for rebuilding Sylenth as a modern virtual analog instrument first, then extending it with AI-assisted sound/arpeggio creation and conversational VST control.
 

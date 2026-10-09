@@ -1,3 +1,5 @@
+#include "NativeArchitectureTests.h"
+#include "NativeArpEffectsTests.h"
 #include "../../src/dsp/Filter.h"
 #include "../../src/dsp/OscillatorStack.h"
 #include "../../src/dsp/Ramp.h"
@@ -181,7 +183,8 @@ bool testOscillatorDetuneNoiseAndSync()
     for (int i = 0; i < 512; ++i)
     {
         if (std::abs(noiseA.renderSample(60, noiseParameters, 0.0f, 0.0f)
-            - noiseB.renderSample(60, noiseParameters, 0.0f, 0.0f)) >= 1.0e-7f)
+                     - noiseB.renderSample(60, noiseParameters, 0.0f, 0.0f))
+            >= 1.0e-7f)
         {
             return false;
         }
@@ -292,11 +295,11 @@ float renderPeak(const synth::SynthParameters& parameters, int sampleCount)
 synth::SynthParameters makeLayerRenderTestParameters()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
     parameters.osc.sawLevel = 1.0f;
     parameters.osc.pulseLevel = 0.15f;
     parameters.osc.subLevel = 0.1f;
-    parameters.ampEnv.releaseMs = 20.0f;
+    parameters.layers[0].ampEnv.releaseMs = 20.0f;
     return parameters;
 }
 
@@ -305,19 +308,19 @@ bool testInactiveLayerStateDoesNotAffectRender()
     const auto baseParameters = makeLayerRenderTestParameters();
     auto mutatedLayerParameters = baseParameters;
     mutatedLayerParameters.layers[0].oscillators[1].enabled = false;
-    mutatedLayerParameters.layers[0].oscillators[1].voices = 8;
+    mutatedLayerParameters.layers[0].oscillators[1].voices = 0;
     mutatedLayerParameters.layers[0].oscillators[1].waveform = synth::OscillatorSlotWaveform::Noise;
-    mutatedLayerParameters.layers[0].oscillators[1].level = 0.0f;
+    mutatedLayerParameters.layers[0].oscillators[1].level = 0.7f;
     mutatedLayerParameters.layers[0].oscillators[1].invert = true;
     mutatedLayerParameters.layers[1].enabled = false;
-    mutatedLayerParameters.layers[1].solo = true;
+    mutatedLayerParameters.layers[1].solo = false;
     mutatedLayerParameters.layers[1].levelDb = 12.0f;
     mutatedLayerParameters.layers[1].pan = 1.0f;
     for (auto& oscillator : mutatedLayerParameters.layers[1].oscillators)
     {
         oscillator.enabled = true;
-        oscillator.voices = 8;
-        oscillator.waveform = synth::OscillatorSlotWaveform::Sub;
+        oscillator.voices = 0;
+        oscillator.waveform = synth::OscillatorSlotWaveform::Sine;
         oscillator.octave = -4;
         oscillator.note = 12;
         oscillator.fineCents = 100.0f;
@@ -360,7 +363,7 @@ bool testLayerBMuteAndSoloAffectRender()
     auto& oscillator = layerBParameters.layers[1].oscillators[0];
     oscillator.enabled = true;
     oscillator.voices = 3;
-    oscillator.waveform = synth::OscillatorSlotWaveform::Sub;
+    oscillator.waveform = synth::OscillatorSlotWaveform::Sine;
     oscillator.octave = -1;
     oscillator.level = 0.9f;
     oscillator.detune = 0.25f;
@@ -463,8 +466,8 @@ void processSamples(synth::SynthEngine& engine, int sampleCount)
 bool testDirectChordExpansion()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
     parameters.chord.enabled = true;
     parameters.chord.voiceCount = 3;
     parameters.chord.voices[0] = { true, 0, 1.0f };
@@ -498,8 +501,8 @@ bool testDirectChordExpansion()
 bool testDirectChordOverlapKeepsSharedOutputHeld()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
     parameters.chord.enabled = true;
     parameters.chord.voiceCount = 2;
     parameters.chord.voices[0] = { true, 0, 1.0f };
@@ -528,8 +531,8 @@ bool testDirectChordOverlapKeepsSharedOutputHeld()
 bool testDirectChordParameterChangeReleasesOriginalOutputs()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
     parameters.chord.enabled = true;
     parameters.chord.voiceCount = 2;
     parameters.chord.voices[0] = { true, 0, 1.0f };
@@ -557,8 +560,8 @@ bool testDirectChordParameterChangeReleasesOriginalOutputs()
 bool testDirectChordSustainParameterChangeClearsOriginalOutputs()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
     parameters.chord.enabled = true;
     parameters.chord.voiceCount = 2;
     parameters.chord.voices[0] = { true, 0, 1.0f };
@@ -592,9 +595,10 @@ bool testDirectChordSustainParameterChangeClearsOriginalOutputs()
 bool testArpChordSustainParameterChangeClearsOriginalOutputs()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.attackMs = 0.0f;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.attackMs = 0.0f;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
+    parameters.sync = true;
     parameters.arp.enabled = true;
     parameters.arp.mode = synth::ArpMode::Up;
     parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
@@ -607,40 +611,41 @@ bool testArpChordSustainParameterChangeClearsOriginalOutputs()
     parameters.chord.voices[1] = { true, 7, 1.0f };
 
     synth::SynthEngine engine;
-    engine.prepare(1000.0, 1);
+    engine.prepare(8000.0, 1);
     engine.setParameters(parameters);
     engine.noteOn(60, 0.8f);
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (firstHeldNote(engine) != 60)
         return false;
 
-    processSamples(engine, 125);
+    processSamples(engine, 1000);
     if (!hasHeldNote(engine, 67))
         return false;
 
     engine.setSustainPedal(true);
     parameters.chord.enabled = false;
     engine.setParameters(parameters);
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (!hasHeldNote(engine, 60) || hasHeldNote(engine, 67))
         return false;
 
     engine.noteOff(60);
-    processSamples(engine, 2);
+    processSamples(engine, 16);
     if (!hasHeldNote(engine, 60))
         return false;
 
     engine.setSustainPedal(false);
-    processSamples(engine, 2);
+    processSamples(engine, 16);
     return heldSnapshots(engine).empty();
 }
 
 bool testArpUpModeTimingAndGate()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.attackMs = 0.0f;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.attackMs = 0.0f;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
+    parameters.sync = true;
     parameters.arp.enabled = true;
     parameters.arp.mode = synth::ArpMode::Up;
     parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
@@ -649,38 +654,39 @@ bool testArpUpModeTimingAndGate()
     parameters.tempoBpm = 120.0f;
 
     synth::SynthEngine engine;
-    engine.prepare(1000.0, 1);
+    engine.prepare(8000.0, 1);
     engine.setParameters(parameters);
     engine.noteOn(67, 0.9f);
     engine.noteOn(60, 0.9f);
     engine.noteOn(64, 0.9f);
 
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (firstHeldNote(engine) != 60)
         return false;
 
-    processSamples(engine, 32);
+    processSamples(engine, 256);
     if (!heldSnapshots(engine).empty())
         return false;
 
-    processSamples(engine, 92);
+    processSamples(engine, 736);
     if (firstHeldNote(engine) != -1)
         return false;
 
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (firstHeldNote(engine) != 64)
         return false;
 
-    processSamples(engine, 125);
+    processSamples(engine, 1000);
     return firstHeldNote(engine) == 67;
 }
 
-bool testArpOctaveWrapAndStepPitchVelocity()
+bool testArpOctaveWrapAndStepVelocity()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.attackMs = 0.0f;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.attackMs = 0.0f;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
+    parameters.sync = true;
     parameters.arp.enabled = true;
     parameters.arp.mode = synth::ArpMode::Up;
     parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
@@ -692,33 +698,34 @@ bool testArpOctaveWrapAndStepPitchVelocity()
     parameters.tempoBpm = 120.0f;
 
     synth::SynthEngine engine;
-    engine.prepare(1000.0, 1);
+    engine.prepare(8000.0, 1);
     engine.setParameters(parameters);
     engine.noteOn(60, 0.8f);
     engine.noteOn(64, 0.8f);
 
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (firstHeldNote(engine) != 60 || std::abs(firstHeldVelocity(engine) - 0.8f) > 0.001f)
         return false;
 
-    processSamples(engine, 125);
-    if (firstHeldNote(engine) != 71 || std::abs(firstHeldVelocity(engine) - 0.4f) > 0.001f)
+    processSamples(engine, 1000);
+    if (firstHeldNote(engine) != 64 || std::abs(firstHeldVelocity(engine) - 0.4f) > 0.001f)
         return false;
 
-    processSamples(engine, 125);
+    processSamples(engine, 1000);
     if (firstHeldNote(engine) != 72)
         return false;
 
-    processSamples(engine, 125);
-    return firstHeldNote(engine) == 83;
+    processSamples(engine, 1000);
+    return firstHeldNote(engine) == 76;
 }
 
 bool testArpTieHoldAndPanic()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.attackMs = 0.0f;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.attackMs = 0.0f;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
+    parameters.sync = true;
     parameters.arp.enabled = true;
     parameters.arp.mode = synth::ArpMode::AsPlayed;
     parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
@@ -729,24 +736,24 @@ bool testArpTieHoldAndPanic()
     parameters.tempoBpm = 120.0f;
 
     synth::SynthEngine engine;
-    engine.prepare(1000.0, 1);
+    engine.prepare(8000.0, 1);
     engine.setParameters(parameters);
     engine.noteOn(60, 0.8f);
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (firstHeldNote(engine) != 60)
         return false;
 
-    processSamples(engine, 80);
+    processSamples(engine, 640);
     if (firstHeldNote(engine) != 60)
         return false;
 
     engine.noteOff(60);
-    processSamples(engine, 45);
+    processSamples(engine, 360);
     if (firstHeldNote(engine) != 60)
         return false;
 
     engine.panic();
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     return activeSnapshotCount(engine) == 0;
 }
 
@@ -754,39 +761,41 @@ bool testArpEnableDisableWhileNotesHeld()
 {
     {
         synth::SynthParameters parameters;
-        parameters.filter.enabled = false;
-        parameters.ampEnv.attackMs = 0.0f;
-        parameters.ampEnv.releaseMs = 1.0f;
+        parameters.layers[0].filter.enabled = false;
+        parameters.layers[0].ampEnv.attackMs = 0.0f;
+        parameters.layers[0].ampEnv.releaseMs = 1.0f;
         parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
         parameters.arp.gate = 1.0f;
         parameters.arp.stepCount = 1;
         parameters.tempoBpm = 120.0f;
 
         synth::SynthEngine engine;
-        engine.prepare(1000.0, 1);
+        engine.prepare(8000.0, 1);
         engine.setParameters(parameters);
         engine.noteOn(60, 0.8f);
-        processSamples(engine, 1);
+        processSamples(engine, 8);
         if (!hasHeldNote(engine, 60))
             return false;
 
+        parameters.sync = true;
         parameters.arp.enabled = true;
         engine.setParameters(parameters);
-        processSamples(engine, 1);
+        processSamples(engine, 8);
         if (!hasHeldNote(engine, 60))
             return false;
 
         engine.noteOff(60);
-        processSamples(engine, 2);
+        processSamples(engine, 16);
         if (!heldSnapshots(engine).empty())
             return false;
     }
 
     {
         synth::SynthParameters parameters;
-        parameters.filter.enabled = false;
-        parameters.ampEnv.attackMs = 0.0f;
-        parameters.ampEnv.releaseMs = 1.0f;
+        parameters.layers[0].filter.enabled = false;
+        parameters.layers[0].ampEnv.attackMs = 0.0f;
+        parameters.layers[0].ampEnv.releaseMs = 1.0f;
+        parameters.sync = true;
         parameters.arp.enabled = true;
         parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
         parameters.arp.gate = 1.0f;
@@ -794,21 +803,21 @@ bool testArpEnableDisableWhileNotesHeld()
         parameters.tempoBpm = 120.0f;
 
         synth::SynthEngine engine;
-        engine.prepare(1000.0, 1);
+        engine.prepare(8000.0, 1);
         engine.setParameters(parameters);
         engine.noteOn(60, 0.8f);
-        processSamples(engine, 1);
+        processSamples(engine, 8);
         if (!hasHeldNote(engine, 60))
             return false;
 
         parameters.arp.enabled = false;
         engine.setParameters(parameters);
-        processSamples(engine, 1);
+        processSamples(engine, 8);
         if (!hasHeldNote(engine, 60))
             return false;
 
         engine.noteOff(60);
-        processSamples(engine, 2);
+        processSamples(engine, 16);
         if (!heldSnapshots(engine).empty())
             return false;
     }
@@ -819,9 +828,10 @@ bool testArpEnableDisableWhileNotesHeld()
 bool testArpHoldDisableClearsReleasedInputNotes()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
-    parameters.ampEnv.attackMs = 0.0f;
-    parameters.ampEnv.releaseMs = 1.0f;
+    parameters.layers[0].filter.enabled = false;
+    parameters.layers[0].ampEnv.attackMs = 0.0f;
+    parameters.layers[0].ampEnv.releaseMs = 1.0f;
+    parameters.sync = true;
     parameters.arp.enabled = true;
     parameters.arp.mode = synth::ArpMode::AsPlayed;
     parameters.arp.rate = synth::ArpRateDivision::Sixteenth;
@@ -831,21 +841,21 @@ bool testArpHoldDisableClearsReleasedInputNotes()
     parameters.tempoBpm = 120.0f;
 
     synth::SynthEngine engine;
-    engine.prepare(1000.0, 1);
+    engine.prepare(8000.0, 1);
     engine.setParameters(parameters);
     engine.noteOn(60, 0.8f);
-    processSamples(engine, 1);
+    processSamples(engine, 8);
     if (!hasHeldNote(engine, 60))
         return false;
 
     engine.noteOff(60);
-    processSamples(engine, 2);
+    processSamples(engine, 16);
     if (!hasHeldNote(engine, 60))
         return false;
 
     parameters.arp.hold = false;
     engine.setParameters(parameters);
-    processSamples(engine, 2);
+    processSamples(engine, 16);
     return heldSnapshots(engine).empty();
 }
 
@@ -861,7 +871,7 @@ bool testRampGlideAndVelocityGlide()
     parameters.ramp.riseMs = 100.0f;
     parameters.ramp.curve = synth::RampCurve::Linear;
     parameters.osc.sawLevel = 1.0f;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
 
     synth::SynthEngine engine;
     engine.prepare(48000.0, 1);
@@ -917,7 +927,7 @@ bool testGlideOneSampleBoundary()
     parameters.voiceMode = synth::VoiceMode::MonoLegato;
     parameters.glideMs = 1.0f;
     parameters.velocityGlideMs = 1.0f;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
 
     synth::SynthEngine engine;
     engine.prepare(1000.0, 1);
@@ -932,24 +942,44 @@ bool testGlideOneSampleBoundary()
         && std::abs(snapshot.velocityGlide - 1.0f) < 0.0001f;
 }
 
-bool testMonoModeDoesNotLegatoGlide()
+bool testNativePortamentoModes()
 {
-    synth::SynthParameters parameters;
+    auto parameters = native_validation::parameters();
     parameters.voiceMode = synth::VoiceMode::Mono;
+    parameters.portamentoMode = synth::PortamentoMode::Normal;
     parameters.glideMs = 100.0f;
-    parameters.filter.enabled = false;
-
-    synth::SynthEngine engine;
-    engine.prepare(48000.0, 1);
-    engine.setParameters(parameters);
-    engine.noteOn(60, 0.5f);
-    processSamples(engine, 8);
-    engine.noteOn(72, 1.0f);
-    processSamples(engine, 1);
-
-    const auto snapshot = firstActiveSnapshot(engine);
-    return snapshot.midiNote == 72
-        && std::abs(snapshot.effectiveMidiNote - 72.0f) < 0.0001f;
+    parameters.ramp.enabled = true;
+    parameters.ramp.riseMs = 300.0f;
+    synth::SynthEngine overlap;
+    overlap.prepare(48000.0, 64);
+    overlap.setParameters(parameters);
+    overlap.noteOn(60, 0.8f);
+    processSamples(overlap, 4800);
+    const auto rampBefore = firstActiveSnapshot(overlap).ramp;
+    overlap.noteOn(72, 0.8f);
+    processSamples(overlap, 48);
+    const auto overlapping = firstActiveSnapshot(overlap);
+    if (rampBefore < 0.1f || overlapping.effectiveMidiNote <= 60.0f || overlapping.effectiveMidiNote >= 72.0f
+        || overlapping.ramp > 0.05f)
+        return false;
+    for (const auto mode : { synth::PortamentoMode::Normal, synth::PortamentoMode::Slide })
+    {
+        parameters.portamentoMode = mode;
+        synth::SynthEngine separated;
+        separated.prepare(48000.0, 64);
+        separated.setParameters(parameters);
+        separated.noteOn(60, 0.8f);
+        processSamples(separated, 4800);
+        separated.noteOff(60);
+        processSamples(separated, 24000);
+        separated.noteOn(72, 0.8f);
+        processSamples(separated, 48);
+        const auto pitch = firstActiveSnapshot(separated).effectiveMidiNote;
+        if ((mode == synth::PortamentoMode::Normal && std::abs(pitch - 72.0f) > 0.001f)
+            || (mode == synth::PortamentoMode::Slide && (pitch <= 60.0f || pitch >= 72.0f)))
+            return false;
+    }
+    return true;
 }
 
 bool testMonoLegatoRetriggerPolicy()
@@ -961,7 +991,7 @@ bool testMonoLegatoRetriggerPolicy()
     parameters.ramp.enabled = true;
     parameters.ramp.riseMs = 100.0f;
     parameters.ramp.curve = synth::RampCurve::Linear;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
 
     synth::SynthEngine engine;
     engine.prepare(48000.0, 1);
@@ -986,8 +1016,9 @@ bool testMonoLegatoReleaseResumesHeldNote()
         parameters.voiceMode = synth::VoiceMode::MonoLegato;
         parameters.retrigger = false;
         parameters.glideMs = 0.0f;
-        parameters.filter.enabled = false;
-        parameters.ampEnv.releaseMs = 1.0f;
+        parameters.layers[0].filter.enabled = false;
+        parameters.layers[0].ampEnv.releaseMs = 1.0f;
+        parameters.layers[1].ampEnv.releaseMs = 1.0f;
         return parameters;
     };
 
@@ -1080,7 +1111,7 @@ bool testVoiceModeCapChangeReleasesSurplusVoices()
         parameters.voiceMode = synth::VoiceMode::Poly;
         parameters.polyphony = 4;
         parameters.unisonCount = 1;
-        parameters.filter.enabled = false;
+        parameters.layers[0].filter.enabled = false;
 
         synth::SynthEngine engine;
         engine.prepare(48000.0, 1);
@@ -1124,7 +1155,7 @@ bool testVoiceModeCapChangeReleasesSurplusVoices()
         parameters.voiceMode = synth::VoiceMode::Poly;
         parameters.polyphony = 8;
         parameters.unisonCount = 1;
-        parameters.filter.enabled = false;
+        parameters.layers[0].filter.enabled = false;
 
         synth::SynthEngine engine;
         engine.prepare(48000.0, 1);
@@ -1165,7 +1196,7 @@ bool testPolyCapReductionKeepsMostRecentHeldNotes()
     parameters.voiceMode = synth::VoiceMode::Poly;
     parameters.polyphony = 4;
     parameters.unisonCount = 1;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
 
     synth::SynthEngine engine;
     engine.prepare(48000.0, 1);
@@ -1211,7 +1242,7 @@ bool testUnisonModeCollapsesHeldPolyChord()
     parameters.voiceMode = synth::VoiceMode::Poly;
     parameters.polyphony = 4;
     parameters.unisonCount = 1;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
 
     synth::SynthEngine engine;
     engine.prepare(48000.0, 1);
@@ -1255,10 +1286,9 @@ bool testDirectAndTransModRoutes()
     parameters.ramp.enabled = true;
     parameters.ramp.riseMs = 1.0f;
     parameters.direct.oscKeytrackSemitones = 12.0f;
-    parameters.direct.pulseKeytrack = 0.25f;
     parameters.direct.filterKeytrack = 0.5f;
     parameters.macro.motion = 0.5f;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
     parameters.osc.sawLevel = 1.0f;
 
     auto& slot = parameters.transMod.slots[0];
@@ -1266,7 +1296,6 @@ bool testDirectAndTransModRoutes()
     slot.source = synth::ModSource::Ramp;
     slot.scaler = synth::ModSource::Macro1;
     slot.oscPitchSemitones = 12.0f;
-    slot.pulseWidth = 0.2f;
     slot.filterCutoffSemitones = 24.0f;
     slot.ampLevelDb = 6.0f;
     slot.pan = 0.4f;
@@ -1279,10 +1308,8 @@ bool testDirectAndTransModRoutes()
 
     const auto snapshot = firstActiveSnapshot(engine);
     return std::abs(snapshot.directOscPitchSemitones - 12.0f) < 0.05f
-        && std::abs(snapshot.directPulseWidth - 0.25f) < 0.01f
         && std::abs(snapshot.directFilterCutoffSemitones - 6.0f) < 0.05f
         && std::abs(snapshot.transModOscPitchSemitones - 6.0f) < 0.05f
-        && std::abs(snapshot.transModPulseWidth - 0.1f) < 0.01f
         && std::abs(snapshot.transModFilterCutoffSemitones - 12.0f) < 0.05f
         && std::abs(snapshot.transModAmpLevelDb - 3.0f) < 0.05f
         && std::abs(snapshot.transModPan - 0.2f) < 0.01f;
@@ -1293,7 +1320,7 @@ bool testStepLfoTracksStepTable()
     synth::SynthParameters parameters;
     parameters.polyphony = 1;
     parameters.unisonCount = 1;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
     parameters.osc.sawLevel = 1.0f;
     parameters.lfo.shape = synth::LfoShapeChoice::Step;
     parameters.lfo.rateMode = synth::LfoRateMode::Hz;
@@ -1342,7 +1369,7 @@ bool testVoiceUnisonRandomAndPerformanceSources()
     synth::SynthParameters parameters;
     parameters.polyphony = 2;
     parameters.unisonCount = 2;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
     parameters.osc.sawLevel = 1.0f;
 
     parameters.transMod.slots[0].enabled = true;
@@ -1429,8 +1456,8 @@ bool testVoiceModesAndOutputSafety()
 
     synth::SynthParameters parameters;
     parameters.amp.levelDb = std::numeric_limits<float>::quiet_NaN();
-    parameters.filter.cutoffSemitones = std::numeric_limits<float>::infinity();
-    parameters.filter.enabled = true;
+    parameters.layers[0].filter.cutoffSemitones = std::numeric_limits<float>::infinity();
+    parameters.layers[0].filter.enabled = true;
     parameters.osc.sawLevel = 1.0f;
     for (auto& slot : parameters.transMod.slots)
     {
@@ -1500,6 +1527,7 @@ bool testFxDelaySyncAndTail()
     parameters.fx.delayEnabled = true;
     parameters.fx.delayMix = 1.0f;
     parameters.fx.delayFeedback = 0.0f;
+    parameters.sync = true;
     parameters.fx.delaySyncDivision = synth::DelaySyncDivision::Quarter;
     parameters.fx.reverbEnabled = false;
     parameters.fx.chorusEnabled = false;
@@ -1510,6 +1538,7 @@ bool testFxDelaySyncAndTail()
     if (delaySamples != 24000)
         return false;
 
+    parameters.sync = true;
     parameters.fx.delaySyncDivision = synth::DelaySyncDivision::Half;
     parameters.tempoBpm = 20.0f;
     const auto maxDelaySamples = synth::tempoSyncedDelaySamples(48000.0, parameters.tempoBpm,
@@ -1533,55 +1562,65 @@ bool testFxDelaySyncAndTail()
     return delayedPeak > 0.49f && tail >= 6.0f;
 }
 
-bool testFxDelayUsesMacroSpaceWetness()
+bool testVisibleFxMixesAreAuthoritative()
 {
-    synth::FxChain fx;
-    fx.prepare(48000.0, 1);
-
     synth::SynthParameters parameters;
     parameters.fx.enabled = true;
-    parameters.fx.saturationEnabled = false;
-    parameters.fx.phaserEnabled = false;
-    parameters.fx.chorusEnabled = false;
-    parameters.fx.eqEnabled = false;
+    parameters.fx.saturationEnabled = true;
+    parameters.fx.phaserEnabled = true;
+    parameters.fx.chorusEnabled = true;
     parameters.fx.delayEnabled = true;
-    parameters.fx.delayMix = 0.0f;
-    parameters.fx.delayFeedback = 0.0f;
-    parameters.fx.delaySyncDivision = synth::DelaySyncDivision::Quarter;
-    parameters.fx.reverbEnabled = false;
-    parameters.fx.compressorEnabled = false;
-    parameters.macro.space = 1.0f;
-    parameters.tempoBpm = 120.0f;
-
-    const auto tail = synth::fxTailLengthSeconds(parameters);
-    if (tail <= 0.0f)
-        return false;
-
-    const auto delaySamples = synth::tempoSyncedDelaySamples(48000.0, parameters.tempoBpm,
-                                                             parameters.fx.delaySyncDivision);
-    auto delayedPeak = 0.0f;
-    for (int sample = 0; sample <= delaySamples + 8; ++sample)
+    parameters.fx.reverbEnabled = true;
+    parameters.fx.compressorEnabled = true;
+    parameters.fx.eqEnabled = false;
+    parameters.fx.saturationMix = parameters.fx.phaserMix = parameters.fx.chorusMix = 0.0f;
+    parameters.fx.delayMix = parameters.fx.reverbMix = parameters.fx.compressorMix = 0.0f;
+    parameters.macro.space = parameters.macro.drive = 1.0f;
+    synth::FxChain chain;
+    chain.prepare(48000.0, 1);
+    for (int sample = 0; sample < 4096; ++sample)
     {
-        const auto input = sample == 0 ? synth::FxStereoFrame { 0.5f, 0.5f } : synth::FxStereoFrame {};
-        const auto output = fx.process(input, parameters);
-        if (sample == delaySamples)
-            delayedPeak = std::max(std::abs(output.left), std::abs(output.right));
+        const auto input = synth::FxStereoFrame { 0.3f * std::sin(static_cast<float>(sample) * 0.13f),
+                                                  0.2f * std::sin(static_cast<float>(sample) * 0.21f) };
+        const auto output = chain.process(input, parameters);
+        if (output.left != input.left || output.right != input.right)
+            return false;
     }
-
-    return delayedPeak > 0.16f && delayedPeak < 0.19f;
+    if (synth::fxTailLengthSeconds(parameters) != 0.0f)
+        return false;
+    auto zeroMacro = parameters;
+    zeroMacro.macro.drive = 0.0f;
+    zeroMacro.fx.saturationMix = 0.7f;
+    zeroMacro.fx.saturationDrive = 0.6f;
+    auto fullMacro = zeroMacro;
+    fullMacro.macro.drive = 1.0f;
+    synth::FxChain zeroChain, fullChain;
+    zeroChain.prepare(48000.0, 1);
+    fullChain.prepare(48000.0, 1);
+    for (int sample = 0; sample < 4096; ++sample)
+    {
+        const auto input = synth::FxStereoFrame { 0.3f * std::sin(static_cast<float>(sample) * 0.13f),
+                                                  0.2f * std::sin(static_cast<float>(sample) * 0.21f) };
+        const auto zeroOutput = zeroChain.process(input, zeroMacro);
+        const auto fullOutput = fullChain.process(input, fullMacro);
+        if (zeroOutput.left != fullOutput.left || zeroOutput.right != fullOutput.right)
+            return false;
+    }
+    return true;
 }
 
 bool testPanicClearsFxBuffers()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = false;
+    parameters.layers[0].filter.enabled = false;
     parameters.amp.levelDb = -12.0f;
-    parameters.ampEnv.releaseMs = 2000.0f;
+    parameters.layers[0].ampEnv.releaseMs = 2000.0f;
     parameters.fx.enabled = true;
     parameters.fx.saturationEnabled = false;
     parameters.fx.delayEnabled = true;
     parameters.fx.delayMix = 1.0f;
     parameters.fx.delayFeedback = 0.0f;
+    parameters.sync = true;
     parameters.fx.delaySyncDivision = synth::DelaySyncDivision::Sixteenth;
     parameters.fx.reverbEnabled = false;
     parameters.fx.chorusEnabled = false;
@@ -1624,7 +1663,17 @@ bool testReverbBypassClearsRightCombState()
     }
 
     parameters.fx.reverbEnabled = false;
-    fx.process({}, parameters);
+    auto fadingPeak = 0.0f;
+    for (int sample = 0; sample < 7200; ++sample)
+    {
+        const auto output = fx.process({}, parameters);
+        if (!std::isfinite(output.left) || !std::isfinite(output.right)
+            || std::abs(output.left) > 1.0f || std::abs(output.right) > 1.0f)
+            return false;
+        fadingPeak = std::max(fadingPeak, std::max(std::abs(output.left), std::abs(output.right)));
+    }
+    if (fadingPeak <= 1.0e-6f)
+        return false;
 
     parameters.fx.reverbEnabled = true;
     auto peak = 0.0f;
@@ -1640,9 +1689,9 @@ bool testReverbBypassClearsRightCombState()
 bool testEngineFxWetOutputSafety()
 {
     synth::SynthParameters parameters;
-    parameters.filter.enabled = true;
-    parameters.filter.cutoffSemitones = 60.0f;
-    parameters.filter.resonance = 0.4f;
+    parameters.layers[0].filter.enabled = true;
+    parameters.layers[0].filter.cutoffSemitones = 60.0f;
+    parameters.layers[0].filter.resonance = 0.4f;
     parameters.amp.levelDb = -9.0f;
     parameters.fx.enabled = true;
     parameters.fx.saturationEnabled = true;
@@ -1778,24 +1827,36 @@ bool testCompressorRatioUsesDbDomain()
         && output.left < 0.28f;
 }
 
-bool testExpandedFxNonTailModulesDoNotReportTail()
+bool testStatefulFxReportTail()
 {
     synth::SynthParameters parameters;
     parameters.fx.enabled = true;
-    parameters.fx.saturationEnabled = true;
-    parameters.fx.saturationMix = 1.0f;
-    parameters.fx.phaserEnabled = true;
-    parameters.fx.phaserMix = 1.0f;
-    parameters.fx.chorusEnabled = true;
-    parameters.fx.chorusMix = 1.0f;
-    parameters.fx.eqEnabled = true;
-    parameters.fx.eqLowGainDb = 6.0f;
+    parameters.fx.saturationEnabled = false;
+    parameters.fx.phaserEnabled = false;
+    parameters.fx.chorusEnabled = false;
+    parameters.fx.eqEnabled = false;
     parameters.fx.compressorEnabled = true;
     parameters.fx.compressorMix = 1.0f;
     parameters.fx.delayEnabled = false;
     parameters.fx.reverbEnabled = false;
-
-    return synth::fxTailLengthSeconds(parameters) == 0.0f;
+    if (synth::fxTailLengthSeconds(parameters) != 0.0f)
+        return false;
+    parameters.fx.compressorEnabled = false;
+    parameters.fx.phaserEnabled = true;
+    parameters.fx.phaserMix = 1.0f;
+    parameters.fx.phaserFeedback = 0.5f;
+    synth::FxChain chain;
+    chain.prepare(48000.0, 1);
+    chain.process({ 0.5f, -0.25f }, parameters);
+    auto residual = 0.0f;
+    for (int sample = 0; sample < 1000; ++sample)
+    {
+        const auto output = chain.process({}, parameters);
+        if (!std::isfinite(output.left) || !std::isfinite(output.right))
+            return false;
+        residual = std::max(residual, std::max(std::abs(output.left), std::abs(output.right)));
+    }
+    return residual > 1.0e-5f && synth::fxTailLengthSeconds(parameters) > 0.0f;
 }
 
 bool testPhaserBypassClearsRecursiveState()
@@ -1821,7 +1882,14 @@ bool testPhaserBypassClearsRecursiveState()
         fx.process({}, parameters);
 
     parameters.fx.phaserEnabled = false;
-    auto output = fx.process({}, parameters);
+    synth::FxStereoFrame output;
+    for (int sample = 0; sample < 7200; ++sample)
+    {
+        output = fx.process({}, parameters);
+        if (!std::isfinite(output.left) || !std::isfinite(output.right)
+            || std::abs(output.left) > 1.0f || std::abs(output.right) > 1.0f)
+            return false;
+    }
     if (std::abs(output.left) > 1.0e-7f || std::abs(output.right) > 1.0e-7f)
         return false;
 
@@ -1844,6 +1912,9 @@ bool testPhaserBypassClearsRecursiveState()
 
 int main()
 {
+    if (!native_validation::run() || !native_arp_effects_validation::run())
+        return 1;
+
     if (!testOscillatorTuning())
     {
         std::cerr << "Oscillator tuning test failed.\n";
@@ -1946,7 +2017,7 @@ int main()
         return 1;
     }
 
-    if (!testArpOctaveWrapAndStepPitchVelocity())
+    if (!testArpOctaveWrapAndStepVelocity())
     {
         std::cerr << "Arp octave/step pitch/velocity test failed.\n";
         return 1;
@@ -1988,9 +2059,9 @@ int main()
         return 1;
     }
 
-    if (!testMonoModeDoesNotLegatoGlide())
+    if (!testNativePortamentoModes())
     {
-        std::cerr << "Mono mode no-glide test failed.\n";
+        std::cerr << "Normal/Slide portamento or mono retrigger behavior failed.\n";
         return 1;
     }
 
@@ -2060,9 +2131,9 @@ int main()
         return 1;
     }
 
-    if (!testFxDelayUsesMacroSpaceWetness())
+    if (!testVisibleFxMixesAreAuthoritative())
     {
-        std::cerr << "FX delay macro-space wetness test failed.\n";
+        std::cerr << "Visible FX mix controls were overridden by macro state.\n";
         return 1;
     }
 
@@ -2102,9 +2173,9 @@ int main()
         return 1;
     }
 
-    if (!testExpandedFxNonTailModulesDoNotReportTail())
+    if (!testStatefulFxReportTail())
     {
-        std::cerr << "Expanded FX non-tail report test failed.\n";
+        std::cerr << "Stateful FX tail report test failed.\n";
         return 1;
     }
 

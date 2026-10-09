@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "missing_original_reference_evidence",
+  "audio": [
+    {
+      "id": "single-oscillator-dry",
+      "reference": null,
+      "candidate": "../../build/reports/reference/single-oscillator-dry.wav",
+      "source": {"product": "Sylenth1", "capture_origin": "original_plugin", "captured_by": null, "sha256": null},
+      "capture_settings": {"sample_rate": 48000, "block_size": 128, "tempo_bpm": 128, "midi_fixture": null, "preset_state": null, "plugin_version": null, "host_version": null},
+      "limits": {"max_absolute_difference": null, "rms_difference": null, "approved_by": null, "reason": null}
+    },
+    {"id": "two-part-filter-envelope-routing", "reference": null, "candidate": null},
+    {"id": "modulation-envelope-lfo", "reference": null, "candidate": null},
+    {"id": "arpeggiator-events-and-audio", "reference": null, "candidate": null},
+    {"id": "effects-order-and-tail", "reference": null, "candidate": null}
+  ],
+  "images": [
+    {
+      "id": "part-a-main",
+      "reference": null,
+      "candidate": "../../build/reports/reference/part-a-main.png",
+      "source": {"product": "Sylenth1", "capture_origin": "original_plugin", "captured_by": null, "sha256": null},
+      "branding_masks": []
+    },
+    {"id": "part-b-main", "reference": null, "candidate": null, "branding_masks": []},
+    {"id": "arpeggiator", "reference": null, "candidate": null, "branding_masks": []},
+    {"id": "effects", "reference": null, "candidate": null, "branding_masks": []},
+    {"id": "preset-menu", "reference": null, "candidate": null, "branding_masks": []},
+    {"id": "small-display", "reference": null, "candidate": null, "branding_masks": []}
+  ]
+}

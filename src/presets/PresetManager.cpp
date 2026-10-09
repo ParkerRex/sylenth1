@@ -3,17 +3,21 @@
 #include "PresetValidator.h"
 #include "../dsp/SynthParameters.h"
 #include "../plugin/ParameterRegistry.h"
+#include "../modulation/ModulationRouteModel.h"
 
 #include <juce_core/juce_core.h>
 
 #include <algorithm>
+#include <bit>
 #include <cerrno>
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 #include <random>
 #include <string_view>
 #include <system_error>
+#include <unordered_map>
 
 #if JUCE_MAC || JUCE_LINUX
 #include <fcntl.h>
@@ -30,6 +34,23 @@
 
 namespace synth
 {
+std::optional<float> parseStateParameterNumber(const juce::var& value)
+{
+    float number = 0.0f;
+    if (value.isDouble() || value.isInt() || value.isInt64() || value.isBool())
+        number = static_cast<float>(static_cast<double>(value));
+    else if (value.isString())
+    {
+        const auto text = value.toString().trim().toStdString();
+        if (text.empty()) return std::nullopt;
+        char* end = nullptr;
+        number = std::strtof(text.c_str(), &end);
+        if (end == text.c_str() || *end != '\0') return std::nullopt;
+    }
+    else
+        return std::nullopt;
+    return std::isfinite(number) ? std::optional<float>(number) : std::nullopt;
+}
 namespace
 {
 juce::File juceFileForPath(const std::filesystem::path& path)
@@ -89,21 +110,8 @@ float physicalValueFromPresetValue(const ParameterSpec& spec, const juce::var& v
 
 float physicalValueFromStateValue(const ParameterSpec& spec, const juce::var& value)
 {
-    if (!isNumber(value))
-        return spec.kind == ParameterKind::Choice ? static_cast<float>(spec.defaultChoice) : spec.defaultValue;
-
-    const auto numeric = static_cast<float>(static_cast<double>(value));
-    if (!std::isfinite(numeric))
-        return spec.kind == ParameterKind::Choice ? static_cast<float>(spec.defaultChoice) : spec.defaultValue;
-
-    if (spec.kind == ParameterKind::Bool)
-        return numeric >= 0.5f ? 1.0f : 0.0f;
-
-    if (spec.kind == ParameterKind::Choice)
-        return static_cast<float>(std::clamp(static_cast<int>(std::round(numeric)), 0,
-                                             static_cast<int>(spec.choices.size()) - 1));
-
-    return std::clamp(numeric, spec.minimum, spec.maximum);
+    const auto number = parseStateParameterNumber(value);
+    return number.has_value() ? clampPhysicalParameterValue(spec, *number) : spec.defaultValue;
 }
 
 juce::var valueForPreset(const ParameterSpec& spec, const juce::RangedAudioParameter& parameter)
@@ -145,10 +153,14 @@ void setParameterValue(juce::ValueTree& state, const ParameterSpec& spec, float 
 
 void resetStateToDefaults(juce::ValueTree& state)
 {
+    state.removeAllChildren(nullptr);
     for (const auto& spec : getParameterSpecs())
-        setParameterValue(state, spec, spec.kind == ParameterKind::Choice
-            ? static_cast<float>(spec.defaultChoice)
-            : spec.defaultValue);
+    {
+        juce::ValueTree child("PARAM");
+        child.setProperty("id", juce::String(spec.id), nullptr);
+        child.setProperty("value", spec.kind == ParameterKind::Choice ? static_cast<float>(spec.defaultChoice) : spec.defaultValue, nullptr);
+        state.appendChild(child, nullptr);
+    }
 }
 
 bool setKnownParameterValue(juce::ValueTree& state, const char* id, float physicalValue)
@@ -163,7 +175,7 @@ bool setKnownParameterValue(juce::ValueTree& state, const char* id, float physic
 
 void stampPreparedState(juce::ValueTree& state, const std::string& displayName)
 {
-    state.setProperty("schema_version", 1, nullptr);
+    state.setProperty("schema_version", 2, nullptr);
     state.setProperty("plugin_version", SYNTHIA_PROJECT_VERSION, nullptr);
     state.setProperty("current_preset", juce::String(displayName), nullptr);
     state.setProperty("current_preset_path", "", nullptr);
@@ -190,97 +202,67 @@ bool applyRandomizedPatchState(juce::ValueTree& state, std::uint32_t seed)
 {
     std::mt19937 rng(seed);
     auto ok = true;
-    auto set = [&state, &ok](const char* id, float value) {
-        ok = setKnownParameterValue(state, id, value) && ok;
+    auto set = [&state, &ok](const std::string& id, float value) {
+        ok = setKnownParameterValue(state, id.c_str(), value) && ok;
     };
-
-    set("voice.mode", static_cast<float>(randomInt(rng, 1, 3)));
-    set("voice.polyphony", static_cast<float>(randomInt(rng, 4, 16)));
-    set("voice.unison_count", static_cast<float>(randomInt(rng, 1, 6)));
-    set("voice.glide_ms", randomChance(rng, 0.35f) ? randomFloat(rng, 20.0f, 240.0f) : 0.0f);
-
-    set("layer.1.enabled", 1.0f);
-    set("layer.1.level_db", randomFloat(rng, -5.0f, 1.5f));
-    set("layer.1.pan", randomFloat(rng, -0.25f, 0.25f));
-    set("layer.1.osc.1.enabled", 1.0f);
-    set("layer.1.osc.1.voices", 1.0f);
-    set("layer.1.osc.1.level", 1.0f);
-    set("osc.stack_count", static_cast<float>(randomInt(rng, 1, 5)));
-    set("osc.stack_detune", randomFloat(rng, 0.0f, 0.62f));
-    set("osc.pitch_semitones", static_cast<float>(randomInt(rng, -12, 12)));
-    set("osc.fine_cents", randomFloat(rng, -15.0f, 15.0f));
-    set("osc.saw_level", randomFloat(rng, 0.45f, 1.0f));
-    set("osc.pulse_level", randomChance(rng, 0.65f) ? randomFloat(rng, 0.0f, 0.75f) : 0.0f);
-    set("osc.noise_level", randomChance(rng, 0.25f) ? randomFloat(rng, 0.0f, 0.18f) : 0.0f);
-    set("osc.sub_level", randomChance(rng, 0.45f) ? randomFloat(rng, 0.0f, 0.55f) : 0.0f);
-    set("osc.pulse_width", randomFloat(rng, 0.2f, 0.8f));
-
-    if (randomChance(rng, 0.45f))
+    set("voice.mode", 2.0f);
+    set("voice.polyphony", static_cast<float>(randomInt(rng, 4, 8)));
+    set("voice.unison_count", 1.0f);
+    set("voice.glide_ms", randomChance(rng, 0.25f) ? randomFloat(rng, 20.0f, 180.0f) : 0.0f);
+    set("global.sync", randomChance(rng, 0.6f) ? 1.0f : 0.0f);
+    set("master.level_db", randomFloat(rng, -18.0f, -12.0f));
+    for (int layer = 1; layer <= layerCount; ++layer)
     {
-        set("layer.1.osc.2.enabled", 1.0f);
-        set("layer.1.osc.2.voices", static_cast<float>(randomInt(rng, 1, 4)));
-        set("layer.1.osc.2.waveform", static_cast<float>(randomInt(rng, 0, 3)));
-        set("layer.1.osc.2.octave", static_cast<float>(randomInt(rng, -1, 1)));
-        set("layer.1.osc.2.note", static_cast<float>(randomInt(rng, -7, 7)));
-        set("layer.1.osc.2.fine_cents", randomFloat(rng, -12.0f, 12.0f));
-        set("layer.1.osc.2.level", randomFloat(rng, 0.15f, 0.7f));
-        set("layer.1.osc.2.detune", randomFloat(rng, 0.0f, 0.45f));
-        set("layer.1.osc.2.stereo", randomFloat(rng, 0.0f, 0.6f));
-        set("layer.1.osc.2.pan", randomFloat(rng, -0.35f, 0.35f));
+        const auto prefix = "layer." + std::to_string(layer) + ".";
+        set(prefix + "level_db", randomFloat(rng, -5.0f, 0.0f));
+        set(prefix + "filter.mode", static_cast<float>(randomInt(rng, 0, 5)));
+        set(prefix + "filter.cutoff_semitones", randomFloat(rng, 48.0f, 118.0f));
+        set(prefix + "filter.resonance", randomFloat(rng, 0.0f, 0.5f));
+        set(prefix + "filter.drive", randomFloat(rng, 0.0f, 0.3f));
+        set(prefix + "filter.keytrack", randomFloat(rng, 0.2f, 0.7f));
+        set(prefix + "amp_env.attack_ms", randomFloat(rng, 0.0f, 100.0f));
+        set(prefix + "amp_env.decay_ms", randomFloat(rng, 100.0f, 1400.0f));
+        set(prefix + "amp_env.sustain", randomFloat(rng, 0.2f, 0.8f));
+        set(prefix + "amp_env.release_ms", randomFloat(rng, 80.0f, 1500.0f));
+        for (int oscillator = 1; oscillator <= oscillatorSlotsPerLayer; ++oscillator)
+        {
+            const auto oscillatorPrefix = prefix + "osc." + std::to_string(oscillator) + ".";
+            const auto active = (layer == 1 && oscillator == 1) || randomChance(rng, 0.45f);
+            set(oscillatorPrefix + "voices", active ? static_cast<float>(randomInt(rng, 1, 3)) : 0.0f);
+            set(oscillatorPrefix + "waveform", static_cast<float>(randomInt(rng, 0, 7)));
+            set(oscillatorPrefix + "octave", static_cast<float>(randomInt(rng, -1, 1)));
+            set(oscillatorPrefix + "note", static_cast<float>(randomInt(rng, -7, 7)));
+            set(oscillatorPrefix + "fine_cents", randomFloat(rng, -12.0f, 12.0f));
+            set(oscillatorPrefix + "level", active ? randomFloat(rng, 0.35f, 0.8f) : 1.0f);
+            set(oscillatorPrefix + "detune", randomFloat(rng, 0.0f, 0.4f));
+            set(oscillatorPrefix + "stereo", randomFloat(rng, 0.0f, 0.8f));
+            set(oscillatorPrefix + "pan", randomFloat(rng, -0.3f, 0.3f));
+            set(oscillatorPrefix + "phase_degrees", randomFloat(rng, 0.0f, 360.0f));
+        }
     }
-
-    set("filter.enabled", 1.0f);
-    set("filter.mode", static_cast<float>(randomInt(rng, 0, 8)));
-    set("filter.cutoff_semitones", randomFloat(rng, 42.0f, 122.0f));
-    set("filter.resonance", randomFloat(rng, 0.02f, 0.68f));
-    set("filter.drive", randomFloat(rng, 0.0f, 0.55f));
-    set("filter.keytrack", randomFloat(rng, 0.2f, 0.8f));
-    set("filter.oversampling", static_cast<float>(randomInt(rng, 0, 2)));
-
-    set("amp_env.attack_ms", randomFloat(rng, 0.0f, 80.0f));
-    set("amp_env.decay_ms", randomFloat(rng, 90.0f, 1800.0f));
-    set("amp_env.sustain", randomFloat(rng, 0.15f, 0.95f));
-    set("amp_env.release_ms", randomFloat(rng, 45.0f, 2400.0f));
-    set("mod_env.attack_ms", randomFloat(rng, 0.0f, 180.0f));
-    set("mod_env.decay_ms", randomFloat(rng, 80.0f, 2200.0f));
-    set("mod_env.sustain", randomFloat(rng, 0.0f, 0.8f));
-    set("mod_env.release_ms", randomFloat(rng, 40.0f, 1800.0f));
-
-    set("lfo.shape", static_cast<float>(randomInt(rng, 0, 6)));
-    set("lfo.rate_mode", static_cast<float>(randomInt(rng, 0, 1)));
-    set("lfo.rate_hz", randomFloat(rng, 0.2f, 8.0f));
-    set("lfo.sync_division", static_cast<float>(randomInt(rng, 0, 4)));
-    set("lfo.phase_degrees", randomFloat(rng, 0.0f, 360.0f));
-    set("direct.filter_lfo_semitones", randomChance(rng, 0.5f) ? randomFloat(rng, -24.0f, 24.0f) : 0.0f);
-    set("direct.filter_mod_env_semitones", randomChance(rng, 0.5f) ? randomFloat(rng, -36.0f, 36.0f) : 0.0f);
-    set("direct.osc_lfo_semitones", randomChance(rng, 0.3f) ? randomFloat(rng, -12.0f, 12.0f) : 0.0f);
-
-    set("amp.drive", randomFloat(rng, 0.0f, 0.45f));
-    set("amp.level_db", randomFloat(rng, -15.0f, -4.0f));
-    set("amp.pan", randomFloat(rng, -0.2f, 0.2f));
-    set("amp.pan_spread", randomFloat(rng, 0.0f, 0.65f));
-    set("amp.unison_spread", randomFloat(rng, 0.0f, 0.8f));
-    set("amp.analog", randomFloat(rng, 0.0f, 0.5f));
-
-    set("macro.motion", randomFloat(rng, 0.2f, 0.8f));
-    set("macro.width", randomFloat(rng, 0.0f, 0.8f));
-    set("macro.drive", randomFloat(rng, 0.0f, 0.6f));
-    set("macro.space", randomFloat(rng, 0.0f, 0.75f));
-
-    const auto fxEnabled = randomChance(rng, 0.65f);
-    set("fx.enabled", fxEnabled ? 1.0f : 0.0f);
-    set("fx.saturation_enabled", fxEnabled && randomChance(rng, 0.6f) ? 1.0f : 0.0f);
-    set("fx.saturation_mix", fxEnabled ? randomFloat(rng, 0.0f, 0.35f) : 0.0f);
-    set("fx.saturation_drive", randomFloat(rng, 0.15f, 0.7f));
-    set("fx.delay_enabled", fxEnabled && randomChance(rng, 0.45f) ? 1.0f : 0.0f);
-    set("fx.delay_mix", fxEnabled ? randomFloat(rng, 0.0f, 0.28f) : 0.0f);
-    set("fx.delay_feedback", randomFloat(rng, 0.08f, 0.55f));
-    set("fx.reverb_enabled", fxEnabled && randomChance(rng, 0.45f) ? 1.0f : 0.0f);
-    set("fx.reverb_mix", fxEnabled ? randomFloat(rng, 0.0f, 0.32f) : 0.0f);
-    set("fx.reverb_decay", randomFloat(rng, 0.12f, 0.65f));
-    set("quality.realtime_mode", 1.0f);
-    set("quality.offline_mode", 2.0f);
-
+    for (int source = 1; source <= 2; ++source)
+    {
+        const auto envPrefix = source == 1 ? std::string("mod_env.") : std::string("mod_env.2.");
+        set(envPrefix + "attack_ms", randomFloat(rng, 0.0f, 160.0f));
+        set(envPrefix + "decay_ms", randomFloat(rng, 120.0f, 1800.0f));
+        set(envPrefix + "sustain", randomFloat(rng, 0.0f, 0.6f));
+        set(envPrefix + "release_ms", randomFloat(rng, 80.0f, 1000.0f));
+        const auto lfoPrefix = source == 1 ? std::string("lfo.") : std::string("lfo.2.");
+        set(lfoPrefix + "shape", static_cast<float>(randomInt(rng, 0, 6)));
+        set(lfoPrefix + "rate_hz", randomFloat(rng, 0.2f, 6.0f));
+        set(lfoPrefix + "sync_division", static_cast<float>(randomInt(rng, 0, 5)));
+    }
+    set("direct.filter_mod_env_semitones", randomFloat(rng, -18.0f, 30.0f));
+    set("direct.filter_lfo_semitones", randomFloat(rng, -12.0f, 12.0f));
+    set("fx.saturation_enabled", randomChance(rng, 0.35f) ? 1.0f : 0.0f);
+    set("fx.saturation_mix", randomFloat(rng, 0.0f, 0.2f));
+    set("fx.saturation_drive", randomFloat(rng, 0.1f, 0.4f));
+    set("fx.delay_enabled", randomChance(rng, 0.3f) ? 1.0f : 0.0f);
+    set("fx.delay_mix", randomFloat(rng, 0.0f, 0.2f));
+    set("fx.delay_feedback", randomFloat(rng, 0.08f, 0.4f));
+    set("fx.reverb_enabled", randomChance(rng, 0.3f) ? 1.0f : 0.0f);
+    set("fx.reverb_mix", randomFloat(rng, 0.0f, 0.25f));
+    set("fx.reverb_decay", randomFloat(rng, 0.1f, 0.5f));
     return ok;
 }
 
@@ -293,25 +275,6 @@ void applyPresetParameter(juce::ValueTree& state,
         return;
 
     setParameterValue(state, *spec, physicalValueFromPresetValue(*spec, value));
-}
-
-void overlayParameterStateChild(juce::ValueTree& state, const juce::ValueTree& child)
-{
-    if (!child.hasType("PARAM"))
-    {
-        state.appendChild(child.createCopy(), nullptr);
-        return;
-    }
-
-    const auto id = child.getProperty("id").toString().toStdString();
-    const auto* spec = findParameterSpec(id);
-    if (spec == nullptr)
-    {
-        state.appendChild(child.createCopy(), nullptr);
-        return;
-    }
-
-    setParameterValue(state, *spec, physicalValueFromStateValue(*spec, child.getProperty("value")));
 }
 
 void applyModSlotDepth(juce::ValueTree& state,
@@ -329,11 +292,6 @@ void applyModSlotDepth(juce::ValueTree& state,
         parameterId = "transmod." + std::to_string(slotNumber) + ".osc_pitch_semitones";
         physicalValue = normalized ? std::clamp(value, -1.0f, 1.0f) * 48.0f : value;
     }
-    else if (targetId == "osc.pulse_width")
-    {
-        parameterId = "transmod." + std::to_string(slotNumber) + ".pulse_width";
-        physicalValue = std::clamp(value, -1.0f, 1.0f);
-    }
     else if (targetId == "filter.cutoff_semitones")
     {
         parameterId = "transmod." + std::to_string(slotNumber) + ".filter_cutoff_semitones";
@@ -350,6 +308,14 @@ void applyModSlotDepth(juce::ValueTree& state,
         physicalValue = std::clamp(value, -1.0f, 1.0f);
     }
 
+    if (parameterId.empty())
+        for (const auto& destination : modulationDestinationCatalog())
+            if (destination.targetParameterId == targetId && destination.nativeIndex >= 0)
+            {
+                parameterId = transModDepthParameterId(slotNumber, destination);
+                physicalValue = normalized ? value * destination.maximumDepth : value;
+                break;
+            }
     if (const auto* spec = findParameterSpec(parameterId))
         setParameterValue(state, *spec, physicalValue);
 }
@@ -581,8 +547,9 @@ std::string normalizedFavoritePath(const std::filesystem::path& path)
 std::vector<std::string> normalizedFavoriteKeys(std::vector<std::string> favoriteKeys)
 {
     favoriteKeys.erase(std::remove_if(favoriteKeys.begin(), favoriteKeys.end(), [](const auto& key) {
-        return key.empty();
-    }), favoriteKeys.end());
+                           return key.empty();
+                       }),
+                       favoriteKeys.end());
     std::sort(favoriteKeys.begin(), favoriteKeys.end());
     favoriteKeys.erase(std::unique(favoriteKeys.begin(), favoriteKeys.end()), favoriteKeys.end());
     return favoriteKeys;
@@ -615,20 +582,15 @@ std::int64_t quantizedFingerprintValue(const ParameterSpec& spec, float physical
     if (spec.kind == ParameterKind::Choice)
         return static_cast<std::int64_t>(std::round(physicalValue));
 
-    const auto resolution = spec.interval > 0.0f ? spec.interval : 0.000001f;
-    return static_cast<std::int64_t>(std::floor((physicalValue - spec.minimum) / resolution + 0.5f));
-}
+    const juce::NormalisableRange<float> range { spec.minimum, spec.maximum, spec.interval, spec.skew };
+    const auto snapped = range.snapToLegalValue(physicalValue);
+    if (spec.interval > 0.0f)
+        return static_cast<std::int64_t>(std::llround((static_cast<double>(snapped) - spec.minimum) / spec.interval));
 
-juce::var stateParameterValue(const juce::ValueTree& state, const std::string& parameterId)
-{
-    const auto juceId = juce::String(parameterId);
-    for (const auto& child : state)
-    {
-        if (child.hasType("PARAM") && child.getProperty("id").toString() == juceId)
-            return child.getProperty("value");
-    }
-
-    return {};
+    // Continuous controls persist through host-normalized float values. Hash that
+    // representation rather than physical-domain cancellation from the inverse.
+    const auto normalized = range.convertTo0to1(snapped);
+    return normalized == 0.0f ? 0 : static_cast<std::int64_t>(std::bit_cast<std::uint32_t>(normalized));
 }
 
 PresetStateFingerprint fingerprintRegistryValues(const std::vector<float>& physicalValues)
@@ -709,10 +671,12 @@ juce::var currentModSlotArray(const juce::AudioProcessorValueTreeState& paramete
 
         auto depths = std::make_unique<juce::DynamicObject>();
         depths->setProperty("osc.pitch_semitones", floatValue(parameters, prefix + "osc_pitch_semitones"));
-        depths->setProperty("osc.pulse_width", floatValue(parameters, prefix + "pulse_width"));
         depths->setProperty("filter.cutoff_semitones", floatValue(parameters, prefix + "filter_cutoff_semitones"));
         depths->setProperty("amp.level_db", floatValue(parameters, prefix + "amp_level_db"));
         depths->setProperty("amp.pan", floatValue(parameters, prefix + "pan"));
+        for (const auto& destination : modulationDestinationCatalog())
+            if (destination.nativeIndex >= 0)
+                depths->setProperty(juce::Identifier(destination.targetParameterId), floatValue(parameters, prefix + destination.depthSuffix));
         slotObject->setProperty("depths", juce::var(depths.release()));
 
         slots.add(juce::var(slotObject.release()));
@@ -812,8 +776,8 @@ std::vector<PresetSummary> scanPresetDirectory(const std::filesystem::path& dire
         return presets;
 
     std::filesystem::recursive_directory_iterator iterator { directory,
-        std::filesystem::directory_options::skip_permission_denied,
-        error };
+                                                             std::filesystem::directory_options::skip_permission_denied,
+                                                             error };
     if (error)
         return presets;
 
@@ -1168,7 +1132,7 @@ PresetLoadResult preparePresetState(juce::AudioProcessorValueTreeState& paramete
         return result;
     }
 
-    auto state = parameters.copyState();
+    auto state = juce::ValueTree(parameters.state.getType());
     resetStateToDefaults(state);
 
     const auto parameterVar = object->getProperty(juce::Identifier("parameters"));
@@ -1194,7 +1158,7 @@ PresetLoadResult preparePresetState(juce::AudioProcessorValueTreeState& paramete
     result.loaded = true;
     result.displayName = propertyString(*object, "display_name");
     result.message = "Loaded preset: " + result.displayName;
-    state.setProperty("schema_version", 1, nullptr);
+    state.setProperty("schema_version", 2, nullptr);
     state.setProperty("plugin_version", SYNTHIA_PROJECT_VERSION, nullptr);
     state.setProperty("current_preset", juce::String(result.displayName), nullptr);
     result.fingerprint = fingerprintPresetState(state);
@@ -1205,7 +1169,7 @@ PresetLoadResult preparePresetState(juce::AudioProcessorValueTreeState& paramete
 PresetLoadResult prepareInitPresetState(juce::AudioProcessorValueTreeState& parameters)
 {
     PresetLoadResult result;
-    auto state = parameters.copyState();
+    auto state = juce::ValueTree(parameters.state.getType());
     resetStateToDefaults(state);
     stampPreparedState(state, "Init");
 
@@ -1221,7 +1185,7 @@ PresetLoadResult prepareRandomizedPresetState(juce::AudioProcessorValueTreeState
                                               std::uint32_t seed)
 {
     PresetLoadResult result;
-    auto state = parameters.copyState();
+    auto state = juce::ValueTree(parameters.state.getType());
     resetStateToDefaults(state);
     if (!applyRandomizedPatchState(state, seed))
     {
@@ -1263,28 +1227,19 @@ PresetStateFingerprint fingerprintCurrentPresetState(const juce::AudioProcessorV
 
 PresetStateFingerprint fingerprintPresetState(const juce::ValueTree& state)
 {
-    if (!state.isValid())
-        return {};
-
+    if (!state.isValid()) return {};
+    std::unordered_map<std::string, juce::var> values;
+    values.reserve(static_cast<std::size_t>(state.getNumChildren()));
+    for (const auto& child : state)
+        if (child.hasType("PARAM")) values.insert_or_assign(child.getProperty("id").toString().toStdString(), child.getProperty("value"));
     const auto& specs = getParameterSpecs();
-    std::vector<float> physicalValues(specs.size(), 0.0f);
-
-    for (std::size_t index = 0; index < specs.size(); ++index)
+    std::vector<float> physicalValues;
+    physicalValues.reserve(specs.size());
+    for (const auto& spec : specs)
     {
-        const auto& spec = specs[index];
-        const auto value = stateParameterValue(state, spec.id);
-        if (value.isVoid())
-        {
-            physicalValues[index] = spec.kind == ParameterKind::Choice
-                ? static_cast<float>(spec.defaultChoice)
-                : spec.defaultValue;
-        }
-        else
-        {
-            physicalValues[index] = physicalValueFromStateValue(spec, value);
-        }
+        const auto found = values.find(spec.id);
+        physicalValues.push_back(found == values.end() ? spec.defaultValue : physicalValueFromStateValue(spec, found->second));
     }
-
     return fingerprintRegistryValues(physicalValues);
 }
 
@@ -1324,7 +1279,7 @@ PresetLoadResult preparePresetCompareSlotState(juce::AudioProcessorValueTreeStat
 
     auto state = mergeParameterStateWithDefaults(parameters, slot.state);
     const auto displayName = slot.label.empty() ? std::string("Compare Slot") : slot.label;
-    state.setProperty("schema_version", 1, nullptr);
+    state.setProperty("schema_version", 2, nullptr);
     state.setProperty("plugin_version", SYNTHIA_PROJECT_VERSION, nullptr);
     state.setProperty("current_preset", juce::String(displayName), nullptr);
     state.setProperty("current_preset_path", "", nullptr);
@@ -1337,16 +1292,46 @@ PresetLoadResult preparePresetCompareSlotState(juce::AudioProcessorValueTreeStat
     return result;
 }
 
+bool writeOwnedStateFile(const std::filesystem::path& path, const juce::String& text, bool overwrite, std::string& error)
+{
+    std::error_code directoryError;
+    std::filesystem::create_directories(path.parent_path(), directoryError);
+    if (directoryError)
+    {
+        error = directoryError.message();
+        return false;
+    }
+    if (!overwrite)
+        return writeNewTextFile(path, text, error);
+    const auto target = juceFileForPath(path);
+    juce::TemporaryFile temporary(target);
+    if (!temporary.getFile().replaceWithText(text) || !temporary.overwriteTargetFileWithTemporary())
+    {
+        error = "could not replace file atomically: " + path.string();
+        return false;
+    }
+    return true;
+}
+
 juce::ValueTree mergeParameterStateWithDefaults(juce::AudioProcessorValueTreeState& parameters,
                                                 const juce::ValueTree& overrideState)
 {
-    auto state = parameters.copyState();
-    resetStateToDefaults(state);
+    juce::ValueTree state(parameters.state.getType());
     state.copyPropertiesFrom(overrideState, nullptr);
-
+    std::unordered_map<std::string, juce::var> values;
+    values.reserve(static_cast<std::size_t>(overrideState.getNumChildren()));
     for (const auto& child : overrideState)
-        overlayParameterStateChild(state, child);
-
+        if (child.hasType("PARAM")) values.insert_or_assign(child.getProperty("id").toString().toStdString(), child.getProperty("value"));
+    for (const auto& spec : getParameterSpecs())
+    {
+        const auto found = values.find(spec.id);
+        juce::ValueTree child("PARAM");
+        child.setProperty("id", juce::String(spec.id), nullptr);
+        child.setProperty("value", found == values.end() ? spec.defaultValue : physicalValueFromStateValue(spec, found->second), nullptr);
+        state.appendChild(child, nullptr);
+    }
+    for (const auto& child : overrideState)
+        if (!child.hasType("PARAM")) state.appendChild(child.createCopy(), nullptr);
     return state;
 }
 
@@ -1409,7 +1394,7 @@ bool writeCurrentPreset(const juce::AudioProcessorValueTreeState& parameters,
     const auto category = options.metadata.category.empty() ? std::string("User") : options.metadata.category;
 
     auto preset = std::make_unique<juce::DynamicObject>();
-    preset->setProperty("schema_version", 1);
+    preset->setProperty("schema_version", 2);
     preset->setProperty("plugin_min_version", SYNTHIA_PROJECT_VERSION);
     preset->setProperty("id", juce::String(presetIdFromDisplayName(safeName)));
     preset->setProperty("display_name", juce::String(safeName));
@@ -1469,8 +1454,7 @@ bool writeCurrentPreset(const juce::AudioProcessorValueTreeState& parameters,
     }
     else
     {
-        const auto file = juceFileForPath(destination);
-        wrotePreset = file.replaceWithText(presetJson, false, false, "\n");
+        wrotePreset = writeOwnedStateFile(destination, presetJson, true, error);
         if (!wrotePreset)
             error = "could not write preset file: " + destination.string();
     }

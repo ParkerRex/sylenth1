@@ -2,6 +2,7 @@
 
 #include "../dsp/SynthParameters.h"
 #include "../plugin/ParameterRegistry.h"
+#include "../modulation/ModulationRouteModel.h"
 
 #include <juce_core/juce_core.h>
 
@@ -54,10 +55,10 @@ bool isAllowedChoice(const ParameterSpec& spec, const juce::var& value)
 bool isAllowedModDestination(const std::string& targetId)
 {
     return targetId == "osc.pitch_semitones"
-        || targetId == "osc.pulse_width"
         || targetId == "filter.cutoff_semitones"
         || targetId == "amp.level_db"
-        || targetId == "amp.pan";
+        || targetId == "amp.pan"
+        || std::any_of(modulationDestinationCatalog().begin(), modulationDestinationCatalog().end(), [&targetId](const auto& destination) { return destination.nativeIndex >= 0 && destination.targetParameterId == targetId; });
 }
 
 bool isDepthInRange(const std::string& targetId, const std::string& depthDomain, float value)
@@ -67,8 +68,6 @@ bool isDepthInRange(const std::string& targetId, const std::string& depthDomain,
 
     if (targetId == "osc.pitch_semitones")
         return value >= -48.0f && value <= 48.0f;
-    if (targetId == "osc.pulse_width")
-        return value >= -1.0f && value <= 1.0f;
     if (targetId == "filter.cutoff_semitones")
         return value >= -72.0f && value <= 72.0f;
     if (targetId == "amp.level_db")
@@ -76,6 +75,9 @@ bool isDepthInRange(const std::string& targetId, const std::string& depthDomain,
     if (targetId == "amp.pan")
         return value >= -1.0f && value <= 1.0f;
 
+    for (const auto& destination : modulationDestinationCatalog())
+        if (destination.targetParameterId == targetId && destination.nativeIndex >= 0)
+            return std::isfinite(value) && value >= destination.minimumDepth && value <= destination.maximumDepth;
     return false;
 }
 
@@ -476,8 +478,8 @@ std::vector<PresetValidationResult> validatePresetDirectory(const std::filesyste
     }
 
     std::filesystem::recursive_directory_iterator iterator { directory,
-        std::filesystem::directory_options::skip_permission_denied,
-        error };
+                                                             std::filesystem::directory_options::skip_permission_denied,
+                                                             error };
     if (error)
     {
         PresetValidationResult result;
