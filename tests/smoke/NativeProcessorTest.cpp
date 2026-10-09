@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 namespace
@@ -26,6 +27,137 @@ bool parameterMatches(SynthAudioProcessor& processor, const char* id, float valu
         std::cerr << "Processor parameter mismatch: " << id << " expected " << value << " actual "
                   << (parameter != nullptr ? parameter->load() : -9999.0f) << " program " << processor.getCurrentProgram() << "\n";
     return matches;
+}
+
+juce::AccessibilityHandler* findAccessibleControl(juce::Component& component, const juce::String& title)
+{
+    if (component.getTitle() == title)
+        return component.getAccessibilityHandler();
+    for (auto* child : component.getChildren())
+        if (auto* handler = findAccessibleControl(*child, title))
+            return handler;
+    return nullptr;
+}
+
+class AccessibilityGestureRecorder final : private juce::AudioProcessorParameter::Listener
+{
+public:
+    explicit AccessibilityGestureRecorder(juce::AudioProcessorParameter& observed) : parameter(observed)
+    {
+        parameter.addListener(this);
+    }
+    ~AccessibilityGestureRecorder() override { parameter.removeListener(this); }
+    bool completed(int count) const { return valid && !active && starts == count && ends == count && changes >= count; }
+
+private:
+    void parameterValueChanged(int, float) override
+    {
+        valid = valid && active;
+        ++changes;
+    }
+    void parameterGestureChanged(int, bool beginning) override
+    {
+        valid = valid && (beginning != active);
+        active = beginning;
+        if (beginning) ++starts;
+        else ++ends;
+    }
+    juce::AudioProcessorParameter& parameter;
+    int starts = 0, ends = 0, changes = 0;
+    bool active = false, valid = true;
+};
+
+bool editorAccessibilityOperatesNativeControls()
+{
+    SynthAudioProcessor processor;
+    const auto* masterSpec = synth::findParameterSpec("master.level_db");
+    const auto* waveformSpec = synth::findParameterSpec("layer.1.osc.1.waveform");
+    const auto* retriggerSpec = synth::findParameterSpec("layer.1.osc.1.retrigger");
+    const auto* octaveBSpec = synth::findParameterSpec("layer.2.osc.1.octave");
+    if (masterSpec == nullptr || waveformSpec == nullptr || retriggerSpec == nullptr || octaveBSpec == nullptr)
+        return false;
+    std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+    if (editor == nullptr)
+        return false;
+    editor->setVisible(false);
+    // JUCE accessibility handlers require a native peer; no visible window is needed.
+    editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
+    auto* master = findAccessibleControl(*editor, masterSpec->name);
+    auto* parameter = processor.getValueTreeState().getParameter(masterSpec->id);
+    if (master == nullptr || parameter == nullptr || master->getRole() != juce::AccessibilityRole::slider)
+        return false;
+    auto* value = master->getValueInterface();
+    if (value == nullptr || value->isReadOnly())
+        return false;
+    const auto range = value->getRange();
+    if (!range.isValid() || std::abs(range.getMinimumValue() - masterSpec->minimum) > 0.0
+        || std::abs(range.getMaximumValue() - masterSpec->maximum) > 0.0)
+        return false;
+    {
+        AccessibilityGestureRecorder gestures(*parameter);
+        value->setValue(-18.0);
+        if (!parameterMatches(processor, "master.level_db", -18.0f) || !gestures.completed(1))
+            return false;
+        value->setValue(range.getMaximumValue() + 10.0);
+        if (!parameterMatches(processor, "master.level_db", masterSpec->maximum) || !gestures.completed(2))
+            return false;
+        value->setValue(range.getMinimumValue() - 10.0);
+        if (!parameterMatches(processor, "master.level_db", masterSpec->minimum) || !gestures.completed(3))
+            return false;
+        value->setValue(std::numeric_limits<double>::quiet_NaN());
+        value->setValue(std::numeric_limits<double>::infinity());
+        value->setValueAsString("invalid numeric value");
+        if (!parameterMatches(processor, "master.level_db", masterSpec->minimum) || !gestures.completed(3))
+            return false;
+    }
+    if (!writeParameter(processor, "master.level_db", -9.0f) || std::abs(value->getCurrentValue() + 9.0) > 0.001)
+        return false;
+    auto* waveform = findAccessibleControl(*editor, waveformSpec->name);
+    if (waveform == nullptr || waveform->getRole() != juce::AccessibilityRole::comboBox
+        || waveform->getValueInterface() == nullptr)
+        return false;
+    auto* waveformValue = waveform->getValueInterface();
+    auto* waveformParameter = processor.getValueTreeState().getParameter(waveformSpec->id);
+    if (waveformValue->isReadOnly() || waveformParameter == nullptr)
+        return false;
+    {
+        AccessibilityGestureRecorder gestures(*waveformParameter);
+        waveformValue->setValueAsString("Sine");
+        if (!parameterMatches(processor, "layer.1.osc.1.waveform", static_cast<float>(synth::OscillatorSlotWaveform::Sine))
+            || !gestures.completed(1))
+            return false;
+        waveformValue->setValueAsString("invalid waveform");
+        if (!parameterMatches(processor, "layer.1.osc.1.waveform", static_cast<float>(synth::OscillatorSlotWaveform::Sine))
+            || !gestures.completed(1))
+            return false;
+    }
+    auto* retrigger = findAccessibleControl(*editor, retriggerSpec->name);
+    if (retrigger == nullptr || retrigger->getRole() != juce::AccessibilityRole::toggleButton
+        || !retrigger->getActions().invoke(juce::AccessibilityActionType::toggle)
+        || !parameterMatches(processor, "layer.1.osc.1.retrigger", 0.0f))
+        return false;
+    auto* partB = findAccessibleControl(*editor, "Part B");
+    if (partB == nullptr || partB->getRole() != juce::AccessibilityRole::radioButton
+        || !partB->getActions().invoke(juce::AccessibilityActionType::press))
+        return false;
+    auto passed = false;
+    if (!juce::MessageManager::callAsync([&] {
+            auto* octave = findAccessibleControl(*editor, octaveBSpec->name);
+            auto* selected = findAccessibleControl(*editor, "Part B");
+            if (processor.getSelectedPart() == 1 && octave != nullptr && octave->getValueInterface() != nullptr
+                && selected != nullptr && selected->getCurrentState().isChecked())
+            {
+                octave->getValueInterface()->setValue(1.0);
+                passed = parameterMatches(processor, "layer.2.osc.1.octave", 1.0f)
+                    && parameterMatches(processor, "layer.1.osc.1.octave", 0.0f)
+                    && findAccessibleControl(*editor, waveformSpec->name) == nullptr;
+            }
+            juce::MessageManager::getInstance()->stopDispatchLoop();
+        }))
+        return false;
+    // This is the final test: one dispatch loop applies the deferred Part B action safely.
+    juce::MessageManager::getInstance()->runDispatchLoop();
+    return passed;
 }
 
 bool programPersistence()
@@ -430,6 +562,11 @@ int main()
     if (!uiMidiQueue())
     {
         std::cerr << "UI MIDI note lifecycle or bounded queue overflow behavior failed.\n";
+        return 1;
+    }
+    if (!editorAccessibilityOperatesNativeControls())
+    {
+        std::cerr << "Editor accessibility roles, parameter gestures or Part B action failed.\n";
         return 1;
     }
     std::cout << "Native processor persistence and UI MIDI checks passed.\n";

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <vector>
@@ -117,6 +118,8 @@ public:
           specification(synth::findParameterSpec(id))
     {
         setName(specification != nullptr ? specification->name : id);
+        if (style == Style::Slope) setName(getName().replace("Mode", "Slope"));
+        if (id == "voice.mode") setName("Mono Legato");
         setTitle(getName());
         setDescription("Instrument parameter " + juce::String(id));
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
@@ -146,6 +149,7 @@ public:
             {
                 filterEnabled = nextEnabled;
                 repaint();
+                if (auto* handler = getAccessibilityHandler()) handler->notifyAccessibilityEvent(juce::AccessibilityEvent::valueChanged);
             }
         }
         const auto next = parameter->getValue();
@@ -153,13 +157,20 @@ public:
         {
             normalized = next;
             repaint();
+            if (auto* handler = getAccessibilityHandler()) handler->notifyAccessibilityEvent(juce::AccessibilityEvent::valueChanged);
         }
     }
     float physical() const { return parameter != nullptr ? parameter->convertFrom0to1(normalized) : 0; }
     void writePhysical(float value, bool completeGesture = true)
     {
-        if (parameter == nullptr)
+        if (parameter == nullptr || specification == nullptr || !std::isfinite(value))
             return;
+        value = synth::clampPhysicalParameterValue(*specification, value);
+        if (completeGesture && dragging)
+        {
+            parameter->endChangeGesture();
+            dragging = false;
+        }
         if (completeGesture)
             parameter->beginChangeGesture();
         parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
@@ -388,22 +399,9 @@ public:
             showContextMenu();
             return;
         }
-        if (style == Style::Slope || style == Style::Selector)
+        if (isToggleControl() || (specification->kind == synth::ParameterKind::Choice && (style == Style::Field || style == Style::Route || style == Style::Filter)))
         {
-            if (style == Style::Slope) writePhysical(static_cast<float>(juce::roundToInt(physical()) ^ 1));
-            else writePhysical(physical() < 0.5f ? 1 : 0);
-            return;
-        }
-        if (style == Style::Switch)
-        {
-            if (id == "voice.mode") writePhysical(juce::roundToInt(physical()) == 1 ? 2 : 1);
-            else writePhysical(physical() < 0.5f ? 1 : 0);
-            return;
-        }
-        if (specification->kind == synth::ParameterKind::Choice
-            && (style == Style::Field || style == Style::Route || style == Style::Filter))
-        {
-            showChoices();
+            activate();
             return;
         }
         dragStart = normalized;
@@ -450,7 +448,186 @@ public:
         return false;
     }
 
+    std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override
+    {
+        return std::make_unique<ParameterAccessibilityHandler>(*this);
+    }
+
 private:
+    bool isToggleControl() const noexcept
+    {
+        return style == Style::Switch || style == Style::Slope || style == Style::Selector;
+    }
+    float currentPhysicalValue() const
+    {
+        return parameter != nullptr ? parameter->convertFrom0to1(parameter->getValue()) : 0.0f;
+    }
+    bool isChecked() const
+    {
+        const auto value = currentPhysicalValue();
+        if (style == Style::Slope) return juce::roundToInt(value) % 2 != 0;
+        if (id == "voice.mode") return juce::roundToInt(value) == 1;
+        return value >= 0.5f;
+    }
+    void activate()
+    {
+        if (!isEnabled() || specification == nullptr) return;
+        if (style == Style::Slope) writePhysical(static_cast<float>(juce::roundToInt(currentPhysicalValue()) ^ 1));
+        else if (isToggleControl()) setAccessibleValue(isChecked() ? 0.0 : 1.0);
+        else if (specification->kind == synth::ParameterKind::Choice) showChoices();
+    }
+    void setAccessibleValue(double value)
+    {
+        if (!isEnabled() || parameter == nullptr || specification == nullptr || !std::isfinite(value)) return;
+        if (isToggleControl())
+        {
+            const auto checked = juce::jlimit(0.0, 1.0, value) >= 0.5;
+            if (style == Style::Slope)
+                writePhysical(static_cast<float>((juce::roundToInt(currentPhysicalValue()) & ~1) + (checked ? 1 : 0)));
+            else if (id == "voice.mode") writePhysical(checked ? 1.0f : 2.0f);
+            else writePhysical(checked ? 1.0f : 0.0f);
+            return;
+        }
+        value = juce::jlimit(static_cast<double>(specification->minimum), static_cast<double>(specification->maximum), value);
+        if (style == Style::Filter) writeFilterEnabled(true);
+        writePhysical(static_cast<float>(value));
+    }
+    void writeFilterEnabled(bool enabled)
+    {
+        const auto enabledId = id.substr(0, id.size() - 4) + "enabled";
+        if (auto* value = owner.getValueTreeState().getParameter(enabledId))
+        {
+            value->beginChangeGesture();
+            value->setValueNotifyingHost(enabled ? 1.0f : 0.0f);
+            value->endChangeGesture();
+        }
+        updateValue();
+    }
+    void setAccessibleText(const juce::String& input)
+    {
+        if (!isEnabled() || specification == nullptr) return;
+        const auto text = input.trim();
+        if (isToggleControl())
+        {
+            if (text.equalsIgnoreCase("On") || text.equalsIgnoreCase("true")
+                || (style == Style::Slope && text.equalsIgnoreCase("24 dB"))
+                || (style == Style::Selector && text.equalsIgnoreCase("Slide")))
+            {
+                setAccessibleValue(1);
+                return;
+            }
+            if (text.equalsIgnoreCase("Off") || text.equalsIgnoreCase("false")
+                || (style == Style::Slope && text.equalsIgnoreCase("12 dB"))
+                || (style == Style::Selector && text.equalsIgnoreCase("Normal")))
+            {
+                setAccessibleValue(0);
+                return;
+            }
+        }
+        else if (specification->kind == synth::ParameterKind::Choice)
+        {
+            if (style == Style::Filter)
+            {
+                if (text.equalsIgnoreCase("Bypass"))
+                {
+                    writeFilterEnabled(false);
+                    return;
+                }
+                const juce::StringArray types { "Low Pass", "Band Pass", "High Pass" };
+                for (int index = 0; index < types.size(); ++index)
+                    if (text.equalsIgnoreCase(types[index]))
+                    {
+                        setAccessibleValue(index * 2 + juce::roundToInt(currentPhysicalValue()) % 2);
+                        return;
+                    }
+            }
+            for (std::size_t index = 0; index < specification->choices.size(); ++index)
+                if (text.equalsIgnoreCase(juce::String(specification->choices[index])))
+                {
+                    setAccessibleValue(static_cast<double>(index));
+                    return;
+                }
+        }
+        const auto* begin = text.toRawUTF8();
+        char* end = nullptr;
+        auto value = std::strtod(begin, &end);
+        if (end == begin || !std::isfinite(value)) return;
+        const auto suffix = juce::String::fromUTF8(end).trim().toLowerCase();
+        if (suffix == "%" && (specification->unit == "normalized" || specification->unit == "percent")) value /= 100;
+        else if (suffix == "s" && specification->unit == "milliseconds") value *= 1000;
+        else if (suffix.isNotEmpty() && !((suffix == "ms" && specification->unit == "milliseconds") || (suffix == "hz" && specification->unit == "Hz") || (suffix == "db" && specification->unit == "dB") || (suffix == "deg" && specification->unit == "degrees"))) return;
+        setAccessibleValue(value);
+    }
+    class ParameterAccessibilityHandler final : public juce::AccessibilityHandler
+    {
+    public:
+        explicit ParameterAccessibilityHandler(ClassicParameterControl& component)
+            : AccessibilityHandler(component, component.isToggleControl() ? juce::AccessibilityRole::toggleButton : (component.specification != nullptr && component.specification->kind == synth::ParameterKind::Choice ? juce::AccessibilityRole::comboBox : juce::AccessibilityRole::slider),
+                                   actions(component), Interfaces { std::make_unique<ValueInterface>(component) }),
+              control(component) {}
+        juce::AccessibleState getCurrentState() const override
+        {
+            auto state = AccessibilityHandler::getCurrentState();
+            if (control.isToggleControl())
+            {
+                state = state.withCheckable();
+                if (control.isChecked()) state = state.withChecked();
+            }
+            return state;
+        }
+
+    private:
+        class ValueInterface final : public juce::AccessibilityValueInterface
+        {
+        public:
+            explicit ValueInterface(ClassicParameterControl& component) : control(component) {}
+            bool isReadOnly() const override { return !control.isEnabled() || control.parameter == nullptr || control.specification == nullptr; }
+            double getCurrentValue() const override { return control.isToggleControl() ? (control.isChecked() ? 1.0 : 0.0) : control.currentPhysicalValue(); }
+            juce::String getCurrentValueAsString() const override
+            {
+                if (control.specification == nullptr) return {};
+                if (control.style == Style::Slope) return control.isChecked() ? "24 dB" : "12 dB";
+                if (control.style == Style::Selector) return control.isChecked() ? "Slide" : "Normal";
+                if (control.isToggleControl()) return control.isChecked() ? "On" : "Off";
+                if (control.style == Style::Filter
+                    && control.owner.getEffectiveParameterValue(control.id.substr(0, control.id.size() - 4) + "enabled") < 0.5f) return "Bypass";
+                return formattedValue(*control.specification, control.currentPhysicalValue());
+            }
+            void setValue(double value) override { control.setAccessibleValue(value); }
+            void setValueAsString(const juce::String& value) override { control.setAccessibleText(value); }
+            AccessibleValueRange getRange() const override
+            {
+                if (control.specification == nullptr) return {};
+                if (control.isToggleControl()) return { { 0, 1 }, 1 };
+                const auto& spec = *control.specification;
+                const auto interval = spec.kind == synth::ParameterKind::Choice ? 1.0
+                                                                                : (spec.interval > 0 ? spec.interval : (spec.maximum - spec.minimum) * 0.01);
+                return { { spec.minimum, spec.maximum }, interval };
+            }
+
+        private:
+            ClassicParameterControl& control;
+        };
+        static juce::AccessibilityActions actions(ClassicParameterControl& control)
+        {
+            const auto safe = juce::Component::SafePointer<ClassicParameterControl>(&control);
+            juce::AccessibilityActions result;
+            result.addAction(juce::AccessibilityActionType::showMenu, [safe] {
+                if (safe != nullptr && safe->isEnabled())
+                {
+                    if (!safe->isToggleControl() && safe->specification != nullptr
+                        && safe->specification->kind == synth::ParameterKind::Choice) safe->showChoices();
+                    else safe->showContextMenu();
+                }
+            });
+            if (control.isToggleControl() || (control.specification != nullptr && control.specification->kind == synth::ParameterKind::Choice))
+                result.addAction(juce::AccessibilityActionType::press, [safe] { if (safe != nullptr) safe->activate(); });
+            if (control.isToggleControl())
+                result.addAction(juce::AccessibilityActionType::toggle, [safe] { if (safe != nullptr) safe->activate(); });
+            return result;
+        }
+        ClassicParameterControl& control;
+    };
     void announce()
     {
         if (specification != nullptr) publishReadout(specification->name, formattedValue(*specification, physical()));
@@ -488,13 +665,7 @@ private:
                                if (safe == nullptr || result <= 0) return;
                                if (safe->style == Style::Filter)
                                {
-                                   const auto enabledId = safe->id.substr(0, safe->id.size() - 4) + "enabled";
-                                   if (auto* enabled = safe->owner.getValueTreeState().getParameter(enabledId))
-                                   {
-                                       enabled->beginChangeGesture();
-                                       enabled->setValueNotifyingHost(result == 1000 ? 0.0f : 1.0f);
-                                       enabled->endChangeGesture();
-                                   }
+                                   safe->writeFilterEnabled(result != 1000);
                                }
                                if (result >= 1010 && result <= 1012)
                                    safe->writePhysical(static_cast<float>((result - 1010) * 2 + juce::roundToInt(safe->physical()) % 2));
@@ -553,8 +724,17 @@ private:
 class ClassicAction final : public juce::Component
 {
 public:
-    ClassicAction(juce::String labelValue, std::function<void()> function, bool displayButton = false)
-        : label(std::move(labelValue)), action(std::move(function)), lcd(displayButton) { setMouseCursor(juce::MouseCursor::PointingHandCursor); }
+    ClassicAction(juce::String labelValue, std::function<void()> function, bool displayButton,
+                  const juce::String& accessibleTitle, bool selectable, bool menu)
+        : label(std::move(labelValue)), action(std::move(function)), lcd(displayButton),
+          selectableAction(selectable), menuAction(menu)
+    {
+        setName(accessibleTitle);
+        setTitle(accessibleTitle);
+        setDescription(accessibleTitle);
+        setWantsKeyboardFocus(true);
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+    }
     void paint(juce::Graphics& g) override
     {
         auto area = getLocalBounds().toFloat().reduced(0.7f);
@@ -589,17 +769,78 @@ public:
         drawText(g, label, getLocalBounds(), 10, active ? amber.darker(0.4f) : (lcd ? displayInk : lettering),
                  juce::Justification::centred, false, true);
     }
-    void mouseDown(const juce::MouseEvent&) override
+    void mouseDown(const juce::MouseEvent&) override { invokeAction(); }
+    bool keyPressed(const juce::KeyPress& key) override
     {
-        auto callback = action;
-        callback();
+        if (key == juce::KeyPress::returnKey || key == juce::KeyPress::spaceKey)
+        {
+            requestActivation();
+            return true;
+        }
+        return false;
     }
-    bool active = false;
+    void setSelected(bool selected)
+    {
+        if (active == selected) return;
+        active = selected;
+        repaint();
+        if (auto* handler = getAccessibilityHandler()) handler->notifyAccessibilityEvent(juce::AccessibilityEvent::valueChanged);
+    }
+    std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override
+    {
+        return std::make_unique<ActionAccessibilityHandler>(*this);
+    }
 
 private:
+    void invokeAction()
+    {
+        if (!isEnabled()) return;
+        auto callback = action;
+        callback(); // May destroy this component. The copied callback survives the rebuild.
+    }
+    void requestActivation()
+    {
+        const auto safe = juce::Component::SafePointer<ClassicAction>(this);
+        // Return from the native accessibility action before rebuilding and deleting its handler.
+        juce::MessageManager::callAsync([safe] { if (safe != nullptr) safe->invokeAction(); });
+    }
+    class ActionAccessibilityHandler final : public juce::AccessibilityHandler
+    {
+    public:
+        explicit ActionAccessibilityHandler(ClassicAction& component)
+            : AccessibilityHandler(component, component.selectableAction ? juce::AccessibilityRole::radioButton : juce::AccessibilityRole::button,
+                                   actions(component)),
+              control(component) {}
+        juce::AccessibleState getCurrentState() const override
+        {
+            auto state = AccessibilityHandler::getCurrentState();
+            if (control.selectableAction)
+            {
+                state = state.withSelectable().withCheckable();
+                if (control.active) state = state.withSelected().withChecked();
+            }
+            return state;
+        }
+
+    private:
+        static juce::AccessibilityActions actions(ClassicAction& control)
+        {
+            const auto safe = juce::Component::SafePointer<ClassicAction>(&control);
+            const auto activate = [safe] { if (safe != nullptr && safe->isEnabled()) safe->requestActivation(); };
+            juce::AccessibilityActions result;
+            result.addAction(juce::AccessibilityActionType::press, activate);
+            if (control.selectableAction) result.addAction(juce::AccessibilityActionType::toggle, activate);
+            if (control.menuAction) result.addAction(juce::AccessibilityActionType::showMenu, activate);
+            return result;
+        }
+        ClassicAction& control;
+    };
     juce::String label;
     std::function<void()> action;
     bool lcd = false;
+    bool active = false;
+    bool selectableAction = false;
+    bool menuAction = false;
 };
 } // namespace
 
@@ -664,7 +905,7 @@ private:
     void caption(const juce::String& value, int x, int y, int width, int height = 11, float size = 8.7f,
                  juce::Colour colour = lettering);
     ClassicAction* action(const juce::String& value, int x, int y, int width, int height,
-                          std::function<void()> callback, bool lcd = false);
+                          std::function<void()> callback, bool lcd = false, const juce::String& accessibleTitle = {}, bool selectable = false);
     void envelope(const std::string& prefix, int x, int y, int width);
     void oscillator(int slot, int x);
     void modulationRoutes(int slot, int x, int y, int width);
@@ -721,9 +962,10 @@ void SynthAudioProcessorEditor::ClassicSurface::add(const std::string& id, const
     controls.push_back(std::move(control));
 }
 ClassicAction* SynthAudioProcessorEditor::ClassicSurface::action(const juce::String& value,
-                                                                 int x, int y, int width, int height, std::function<void()> callback, bool lcd)
+                                                                 int x, int y, int width, int height, std::function<void()> callback, bool lcd, const juce::String& accessibleTitle, bool selectable)
 {
-    auto control = std::make_unique<ClassicAction>(value, std::move(callback), lcd);
+    auto control = std::make_unique<ClassicAction>(value, std::move(callback), lcd,
+                                                   accessibleTitle.isEmpty() ? value : accessibleTitle, selectable, value == "v" || value == "MENU");
     control->setBounds(x, y, width, height);
     auto* result = control.get();
     addAndMakeVisible(*control);
@@ -782,7 +1024,7 @@ void SynthAudioProcessorEditor::ClassicSurface::oscillator(int slot, int x)
     add(prefix + "voices", "Voices", Style::Field, x + 227, 109, 24, 17);
     caption("RETRIG", x + 252, 111, 43);
     add(prefix + "retrigger", "Retrigger", Style::Switch, x + 295, 107, 25, 20);
-    action("v", x + 317, 32, 16, 13, [this, prefix] { sectionMenu("Oscillator", { prefix }); });
+    action("v", x + 317, 32, 16, 13, [this, prefix] { sectionMenu("Oscillator", { prefix }); }, false, "Oscillator " + juce::String(selectedPart == 0 ? "A" : "B") + juce::String(slot) + " menu");
 }
 void SynthAudioProcessorEditor::ClassicSurface::modulationRoutes(int slot, int x, int y, int width)
 {
@@ -807,7 +1049,7 @@ void SynthAudioProcessorEditor::ClassicSurface::lfo(int number, int x)
     add(prefix + "gain", "GAIN", Style::Knob, x + 55, 398, 42, 53);
     add(prefix + "offset", "OFFSET", Style::Knob, x + 100, 398, 42, 53);
     modulationRoutes(number + 2, x, 455, 144);
-    action("v", x + 125, 355, 15, 12, [this, prefix, number] { sectionMenu("LFO", { prefix, "transmod." + std::to_string(number + 2) + ".route." }); });
+    action("v", x + 125, 355, 15, 12, [this, prefix, number] { sectionMenu("LFO", { prefix, "transmod." + std::to_string(number + 2) + ".route." }); }, false, "LFO " + juce::String(number) + " menu");
 }
 
 void SynthAudioProcessorEditor::ClassicSurface::buildControls()
@@ -823,8 +1065,8 @@ void SynthAudioProcessorEditor::ClassicSurface::buildControls()
     add("voice.polyphony", "Polyphony", Style::Field, 132, 6, 22, 16);
     caption("Voices", 188, 4, 59, 18, 12);
     caption("Part Select", 326, 4, 83, 18, 12);
-    action("PART A", 408, 5, 44, 18, [this] { setPart(0); })->active = selectedPart == 0;
-    action("PART B", 455, 5, 44, 18, [this] { setPart(1); })->active = selectedPart == 1;
+    action("PART A", 408, 5, 44, 18, [this] { setPart(0); }, false, "Part A", true)->setSelected(selectedPart == 0);
+    action("PART B", 455, 5, 44, 18, [this] { setPart(1); }, false, "Part B", true)->setSelected(selectedPart == 1);
     caption("Solo", 533, 4, 35, 18, 12);
     add("layer." + std::to_string(selectedPart + 1) + ".solo", "Solo", Style::Switch, 569, 4, 22, 19);
     caption("Sync", 617, 4, 39, 18, 12);
@@ -833,7 +1075,7 @@ void SynthAudioProcessorEditor::ClassicSurface::buildControls()
     oscillator(2, 538);
     const auto layer = "layer." + std::to_string(selectedPart + 1) + ".";
     envelope(layer + "amp_env.", 376, 50, 154);
-    action("v", 512, 33, 16, 12, [this, layer] { sectionMenu("Amplifier Envelope", { layer + "amp_env." }); });
+    action("v", 512, 33, 16, 12, [this, layer] { sectionMenu("Amplifier Envelope", { layer + "amp_env." }); }, false, "Amplifier envelope " + juce::String(selectedPart == 0 ? "A" : "B") + " menu");
 
     caption("OSC A", 39, 152, 33, 13, 8, amber);
     caption("OSC B", 39, 167, 33, 13, 8);
@@ -848,7 +1090,7 @@ void SynthAudioProcessorEditor::ClassicSurface::buildControls()
     add(layer + "filter.cutoff_semitones", "CUTOFF", Style::Knob, 39, 198, 44, 53);
     add(layer + "filter.resonance", "RESONANCE", Style::Knob, 95, 198, 45, 53);
     add(layer + "filter.drive", "DRIVE", Style::Knob, 156, 198, 44, 53);
-    action("v", 229, 137, 15, 12, [this, layer] { sectionMenu("Filter", { layer + "filter." }); });
+    action("v", 229, 137, 15, 12, [this, layer] { sectionMenu("Filter", { layer + "filter." }); }, false, "Filter " + juce::String(selectedPart == 0 ? "A" : "B") + " menu");
     add("filter_control.cutoff_semitones", "CUTOFF", Style::Knob, 43, 279, 52, 66);
     add("filter_control.resonance", "RESONANCE", Style::Knob, 102, 279, 52, 66);
     caption("WARM", 153, 287, 43, 10, 8);
@@ -869,8 +1111,8 @@ void SynthAudioProcessorEditor::ClassicSurface::buildControls()
     envelope("mod_env.2.", 172, 373, 134);
     modulationRoutes(1, 34, 455, 132);
     modulationRoutes(2, 174, 455, 132);
-    action("v", 150, 355, 14, 12, [this] { sectionMenu("Modulation Envelope", { "mod_env.", "transmod.1.route." }); });
-    action("v", 294, 355, 14, 12, [this] { sectionMenu("Modulation Envelope", { "mod_env.2.", "transmod.2.route." }); });
+    action("v", 150, 355, 14, 12, [this] { sectionMenu("Modulation Envelope", { "mod_env.", "transmod.1.route." }); }, false, "Modulation envelope 1 menu");
+    action("v", 294, 355, 14, 12, [this] { sectionMenu("Modulation Envelope", { "mod_env.2.", "transmod.2.route." }); }, false, "Modulation envelope 2 menu");
     lfo(1, 313);
     lfo(2, 456);
     for (int misc = 0; misc < 2; ++misc)
@@ -897,6 +1139,7 @@ void SynthAudioProcessorEditor::ClassicSurface::buildControls()
     caption("N", 865, 543, 9, 12, 8);
     caption("S", 865, 558, 9, 12, 8);
     lcdControls();
+    if (auto* handler = getAccessibilityHandler()) handler->notifyAccessibilityEvent(juce::AccessibilityEvent::structureChanged);
 }
 
 void SynthAudioProcessorEditor::ClassicSurface::lcdControls()
@@ -905,21 +1148,22 @@ void SynthAudioProcessorEditor::ClassicSurface::lcdControls()
         action(juce::String(bank + 1), 286 + bank * 18, 160, 17, 18, [this, bank] {
             juce::String message;
             owner.selectProgram(bank * 128 + owner.getCurrentProgram() % 128, message);
-            announce("Program", message); }, true)->active = owner.getCurrentProgram() / 128 == bank;
-    action("<", 591, 160, 15, 18, [this] { juce::String message; owner.previousProgram(message); announce("Program", message); }, true);
-    action(">", 607, 160, 15, 18, [this] { juce::String message; owner.nextProgram(message); announce("Program", message); }, true);
-    action("MENU", 286, 180, 85, 17, [this] { programMenu(); }, true);
+            announce("Program", message); }, true, "Program bank " + juce::String(bank + 1), true)->setSelected(owner.getCurrentProgram() / 128 == bank);
+    action("<", 591, 160, 15, 18, [this] { juce::String message; owner.previousProgram(message); announce("Program", message); }, true, "Previous program");
+    action(">", 607, 160, 15, 18, [this] { juce::String message; owner.nextProgram(message); announce("Program", message); }, true, "Next program");
+    action("MENU", 286, 180, 85, 17, [this] { programMenu(); }, true, "Program menu");
     const std::array<juce::String, 8> names { "ARPEG", "DISTORT", "PHASER", "CHORUS", "EQ", "DELAY", "REVERB", "COMPRESS" };
+    const std::array<juce::String, 8> pageTitles { "Arpeggiator", "Distortion", "Phaser", "Chorus", "Equalizer", "Delay", "Reverb", "Compressor" };
     const std::array<std::string, 8> enabled { "arp.enabled", "fx.saturation_enabled", "fx.phaser_enabled", "fx.chorus_enabled", "fx.eq_enabled", "fx.delay_enabled", "fx.reverb_enabled", "fx.compressor_enabled" };
     for (int page = 0; page < 8; ++page)
     {
         add(enabled[static_cast<std::size_t>(page)], "Enable", Style::Switch, 287, 198 + page * 16, 14, 15);
-        action(names[static_cast<std::size_t>(page)], 302, 198 + page * 16, 69, 15, [this, page] { setPage(page); }, true)->active = selectedPage == page;
+        action(names[static_cast<std::size_t>(page)], 302, 198 + page * 16, 69, 15, [this, page] { setPage(page); }, true, pageTitles[static_cast<std::size_t>(page)] + " page", true)->setSelected(selectedPage == page);
     }
     const std::array<std::vector<std::string>, 8> pagePrefixes {
         std::vector<std::string> { "arp." }, { "fx.saturation_", "fx.distortion_mode" }, { "fx.phaser_" }, { "fx.chorus_" }, { "fx.eq_" }, { "fx.delay_" }, { "fx.reverb_" }, { "fx.compressor_" }
     };
-    action("v", 607, 200, 13, 12, [this, names, pagePrefixes] { sectionMenu(names[static_cast<std::size_t>(selectedPage)], pagePrefixes[static_cast<std::size_t>(selectedPage)]); }, true);
+    action("v", 607, 200, 13, 12, [this, names, pagePrefixes] { sectionMenu(names[static_cast<std::size_t>(selectedPage)], pagePrefixes[static_cast<std::size_t>(selectedPage)]); }, true, pageTitles[static_cast<std::size_t>(selectedPage)] + " menu");
     const auto field = [this](const std::string& id, const juce::String& label, int y, int width = 82) {
         caption(label, 376, y + 2, 51, 12, 8, displayInk);
         add(id, label, Style::Field, 432, y, width, 17);
@@ -936,7 +1180,7 @@ void SynthAudioProcessorEditor::ClassicSurface::lcdControls()
         knob(owner.getEffectiveParameterValue("global.sync") >= 0.5f ? "arp.rate" : "arp.time_ms", "TIME", 507, 211);
         knob("arp.gate", "GATE", 558, 211);
         caption("PAGE", 537, 268, 33, 11, 8, displayInk);
-        action(juce::String(arpPage + 1), 577, 267, 24, 13, [this] { arpPage = 1 - arpPage; buildControls(); repaint(); }, true);
+        action(juce::String(arpPage + 1), 577, 267, 24, 13, [this] { arpPage = 1 - arpPage; buildControls(); repaint(); }, true, "Arpeggiator pattern page " + juce::String(arpPage + 1));
         caption("HOLD", 392, 280, 41, 11, 8, displayInk);
         caption("TRANSPOSE", 375, 293, 58, 11, 8, displayInk);
         caption("VELOCITY", 378, 307, 55, 11, 8, displayInk);
