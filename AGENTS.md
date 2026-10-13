@@ -14,6 +14,8 @@ For meaningful work, read these in order:
 
 Read [docs/PRESET_SCHEMA.md](docs/PRESET_SCHEMA.md) for persistence changes, [docs/CLASSIC_PARITY.md](docs/CLASSIC_PARITY.md) for reference claims, and [docs/BUILD_RELEASE.md](docs/BUILD_RELEASE.md) for packaging. [CONTRIBUTING.md](CONTRIBUTING.md) covers submitting a PR; [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) covers UI captures.
 
+For Apple HIG interface design or review, use [apple-hig-expert](.codex/skills/apple-hig-expert/SKILL.md). It applies current macOS guidance to JUCE and AU/VST3 editors while preserving `SPEC.md` as the product authority.
+
 ## Scope and ownership
 
 - Work on one focused purpose. Preserve unrelated user and agent changes.

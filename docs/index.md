@@ -16,6 +16,7 @@ This directory holds implementation-facing documentation for synthia. `../SPEC.m
 - `CLASSIC_PARITY.md`: current native classic release scope, reference policy, control coverage, and proof gaps.
 - `exec-plans/active/2026-10-09-complete-classic-native-rebuild.md`: active implementation and release qualification plan.
 - `ARCHITECTURE.md`: component model, planned code layout, realtime boundaries.
+- [Apple HIG skill](../.codex/skills/apple-hig-expert/SKILL.md): current macOS interface and accessibility guidance adapted to Synthia's classic JUCE editor and host boundaries.
 - `BUILD_RELEASE.md`: optimized macOS bundle builds, local Ableton install, packaging, and release upload handoff.
 - `PRESET_SCHEMA.md`: preset and host-state shape.
 - `QUALITY.md`: local formatting, linting, realtime-safety, and build-loop quality gates.
