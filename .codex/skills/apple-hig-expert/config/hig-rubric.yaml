@@ -1,0 +1,382 @@
+schemaVersion: 2
+profile: synthia-native
+platform: macos
+lastVerified: '2026-10-13'
+notes:
+- Project source paths resolve from the repository root.
+- Apple recommendations are review guidance; SPEC.md owns product requirements.
+- No browser measurement script consumes this catalog; use native measurements and runtime evidence.
+- A missing point mapping, runtime task, or source verification is untested, never a pass.
+measurements:
+  macos-control-region:
+    unit: pt
+    defaultWidth: 28
+    defaultHeight: 28
+    minimumWidth: 20
+    minimumHeight: 20
+    subject: interactive region at the tested editor scale
+    sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    lastVerified: '2026-10-13'
+    contextNote: The Buttons page separately recommends 44 x 44 pt as broad hit-region advice; do not
+      silently replace the macOS table.
+  macos-custom-type:
+    unit: pt
+    defaultSize: 13
+    minimumSize: 10
+    sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    lastVerified: '2026-10-13'
+  text-enlargement:
+    unit: factor
+    recommendedFactor: 2
+    sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    lastVerified: '2026-10-13'
+  compact-regular-text-contrast:
+    unit: ratio
+    minimumRatio: 4.5
+    subject: regular small text; verify source classification before an exception
+    sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+    lastVerified: '2026-10-13'
+requirements:
+- id: design.principles.purpose
+  category: design-principles
+  title: Purpose
+  criterion: The interface gives each screen and control a clear purpose tied to the person's goal.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.agency
+  category: design-principles
+  title: Agency
+  criterion: People can understand, control, cancel, and recover consequential actions.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.responsibility
+  category: design-principles
+  title: Responsibility
+  criterion: The interface protects attention, privacy, and intent and does not present false success.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.familiarity
+  category: design-principles
+  title: Familiarity
+  criterion: The interface uses recognizable platform patterns and consistent product conventions so people
+    can transfer prior knowledge.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.flexibility
+  category: design-principles
+  title: Flexibility
+  criterion: The interface adapts to different devices, inputs, abilities, and preferred ways of completing
+    the task.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.simplicity
+  category: design-principles
+  title: Simplicity
+  criterion: The interface presents the minimum information and controls needed for the next decision.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.craft
+  category: design-principles
+  title: Craft
+  criterion: Visual, interaction, and content details are coherent, precise, and complete across supported
+    states.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: design.principles.delight
+  category: design-principles
+  title: Delight
+  criterion: Helpful details make the experience pleasant without obscuring purpose, control, or accessibility.
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/design-principles
+  lastVerified: '2026-10-13'
+  authority: apple-guidance
+- id: synthia.layout.classic-contract
+  title: Classic composition and owned identity
+  criterion: Preserve the specified classic canvas, Part A/B composition, LCD pages, required controls,
+    and owned Synthia identity.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: SPEC.md#8-visual-acceptance
+  lastVerified: '2026-10-13'
+- id: synthia.layout.scale-alignment
+  title: Uniform scaling and hit-region alignment
+  criterion: Painted controls and their interaction regions remain aligned at the tested editor and display
+    scales.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: measurement-and-runtime
+  sourceUrl: SPEC.md#8-visual-acceptance
+  lastVerified: '2026-10-13'
+- id: appearance.typography.hierarchy
+  title: Readable type and hierarchy
+  criterion: Record actual type sizes and scaling; evaluate legibility against the macOS defaults and
+    minimum without assuming a font-height unit conversion.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: measurement-and-runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+  measurementRule: macos-custom-type
+- id: accessibility.text.enlargement
+  title: Text enlargement
+  criterion: Test an actual supported enlargement path and report gaps against the recommendation for
+    at least 200 percent text enlargement; image export alone is insufficient.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+  measurementRule: text-enlargement
+- id: accessibility.contrast.text
+  title: Native text contrast
+  criterion: Measure rendered compact regular text against its background; record source classification
+    for any large or bold exception and test Increase Contrast behavior when needed.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: measurement-and-runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+  measurementRule: compact-regular-text-contrast
+- id: accessibility.target.macos
+  title: macOS interaction regions
+  criterion: Measure effective point dimensions and spacing against the macOS control table; report the
+    28-point default and 20-point minimum separately from broad button advice.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: measurement-and-runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+  measurementRule: macos-control-region
+- id: accessibility.semantics.name-role-state
+  title: Accessible names, roles, and state
+  criterion: Custom controls expose meaningful context, value, state, and operable actions that stay correct
+    after part and page changes.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/voiceover
+  lastVerified: '2026-10-13'
+- id: accessibility.semantics.reading-order
+  title: Accessible groups and reading order
+  criterion: Groups and reading order preserve the musical relationships and omit decorative content.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/voiceover
+  lastVerified: '2026-10-13'
+- id: accessibility.focus.behavior
+  title: Focus behavior
+  criterion: Focus is visible and predictable, does not remain on hidden controls, and returns usefully
+    after menus or dialogs close.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/keyboards
+  lastVerified: '2026-10-13'
+- id: input.keyboard.host-boundary
+  title: Keyboard access in the actual host
+  criterion: Supported editing tasks and displayed shortcuts work in the named host/format without taking
+    over host transport or system shortcuts.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/keyboards
+  lastVerified: '2026-10-13'
+- id: input.pointer.precision
+  title: Predictable precision editing
+  criterion: Pointer and modifier interactions are consistent; drag capture, fine adjustment, and wheel
+    behavior support deliberate edits.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/pointing-devices
+  lastVerified: '2026-10-13'
+- id: accessibility.color.independence
+  title: State without color alone
+  criterion: Part, page, enabled, selected, and error states have a perceivable equivalent beyond color.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: observation-and-runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+- id: accessibility.display.settings
+  title: Relevant display settings
+  criterion: Verify actual legibility and state distinctions with relevant contrast, transparency, motion,
+    and magnification settings.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/accessibility
+  lastVerified: '2026-10-13'
+- id: content.writing.naming
+  title: Precise musical labels
+  criterion: Labels, units, menus, values, and accessibility output use consistent terms and distinguish
+    independent and shared controls.
+  authority: apple-guidance
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: https://developer.apple.com/design/human-interface-guidelines/writing
+  lastVerified: '2026-10-13'
+- id: synthia.parameters.host-gestures
+  title: Canonical values and host gestures
+  criterion: Pointer, keyboard, and accessibility edits use the same canonical parameter state and correctly
+    notify the host.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: SPEC.md#3-parameter-and-control-contract
+  lastVerified: '2026-10-13'
+- id: synthia.programs.recovery
+  title: Program and file recovery
+  criterion: Invalid loads preserve valid live state; saves distinguish new files from overwrites and
+    reset follows the saved program baseline.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: SPEC.md#5-programs-presets-and-state
+  lastVerified: '2026-10-13'
+- id: synthia.midi.editor-ownership
+  title: UI note and wheel ownership
+  criterion: Closing an editor releases only its own interactions and preserves DAW-owned notes and unrelated
+    tails.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: runtime
+  sourceUrl: SPEC.md#6-midi-and-host-lifecycle
+  lastVerified: '2026-10-13'
+- id: synthia.realtime.ui-boundary
+  title: Realtime and repaint boundaries
+  criterion: Keep UI work off the audio thread and exclude decorative continuous animation while preserving
+    bounded meaningful feedback.
+  authority: project-requirement
+  applicability:
+    profiles:
+    - synthia-native
+    platforms:
+    - macos
+  evidence: manual
+  sourceUrl: SPEC.md#7-realtime-and-resource-safety
+  lastVerified: '2026-10-13'
